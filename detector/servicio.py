@@ -15,11 +15,10 @@ candado_modelos = Lock()
 
 
 @lru_cache(maxsize=1)
-def cargar_modelos(directorio, hilos, almacen=None):
-    leer_pesos = almacen.leer if almacen is not None else None
+def cargar_modelos(directorio, hilos):
     return (
-        PredictorBaches(directorio / "baches.onnx", hilos, leer_pesos=leer_pesos),
-        PredictorGrietas(directorio / "grietas.onnx", hilos, leer_pesos=leer_pesos),
+        PredictorBaches(directorio / "baches.onnx", hilos),
+        PredictorGrietas(directorio / "grietas.onnx", hilos),
     )
 
 
@@ -27,16 +26,14 @@ def analizar_imagen(imagen):
     """Ejecutar ambos predictores y devolver sus resultados combinados."""
     # El candado evita cargar sesiones duplicadas en las primeras solicitudes simultáneas.
     with candado_modelos:
-        detector, segmentador = cargar_modelos(
-            settings.MODELOS_DIR, settings.HILOS_ONNX, settings.ALMACEN_MODELOS,
-        )
+        detector, segmentador = cargar_modelos(settings.MODELOS_DIR, settings.HILOS_ONNX)
 
     baches = detector.predecir(imagen, umbral=settings.UMBRAL_CONFIANZA_BACHES)
     mascara = segmentador.predecir(imagen, umbral=settings.UMBRAL_SEGMENTACION_GRIETAS)
     pixeles_grieta = int(np.count_nonzero(mascara))
     alto, ancho = imagen.shape[:2]
     return {
-        "imagen": imagen_anotada(imagen, baches, mascara, max_bytes=settings.MAX_BYTES_JPEG_RESULTADO),
+        "imagen": imagen_anotada(imagen, baches, mascara),
         "ancho": ancho,
         "alto": alto,
         "baches": baches,

@@ -1,4 +1,0 @@
-/.venv/
-/.static/
-/.env*
-/modelos/*.onnx

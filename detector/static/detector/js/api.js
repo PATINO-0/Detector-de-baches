@@ -12,9 +12,6 @@ export async function solicitarAnalisis(formulario, imagen, señal) {
     });
     const resultado = await respuesta.json().catch(() => null);
     if (!respuesta.ok || !resultado) {
-        if (respuesta.status === 413 && !resultado?.error) {
-            throw new Error(`La imagen debe pesar como máximo ${formulario.dataset.maxMb} MB.`);
-        }
         throw new Error(resultado?.error || "El servidor no pudo completar el análisis.");
     }
     return resultado;

@@ -102,9 +102,9 @@ def decode(predictions, geometry, confidence, nms_iou, max_det):
 class PredictorBaches:
     """Ejecutar las tres vistas del perfil calibrado del detector."""
 
-    def __init__(self, ruta, hilos, *, leer_pesos=None):
+    def __init__(self, ruta, hilos):
         self.metadatos = cargar_metadatos(ruta)
-        self.sesion = cargar_sesion(ruta, self.metadatos["sha256"][ruta.name], hilos, leer_pesos=leer_pesos)
+        self.sesion = cargar_sesion(ruta, self.metadatos["sha256"][ruta.name], hilos)
         self.entrada = self.sesion.get_inputs()[0].name
 
     def predecir(self, imagen, *, umbral=None):

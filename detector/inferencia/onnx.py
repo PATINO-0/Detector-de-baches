@@ -10,9 +10,8 @@ def cargar_metadatos(ruta):
     return json.loads(ruta.with_suffix(".json").read_text(encoding="utf-8"))
 
 
-def cargar_sesion(ruta, sha256, hilos, *, leer_pesos=None):
-    """Validar el grafo local o descargado antes de abrir la sesión ONNX."""
-    grafo = ruta.read_bytes() if leer_pesos is None else leer_pesos(ruta.name)
+def cargar_sesion(ruta, sha256, hilos):
+    grafo = ruta.read_bytes()
     if hashlib.sha256(grafo).hexdigest() != sha256:
         raise ValueError(f"El SHA-256 de {ruta.name} no coincide con sus metadatos.")
 

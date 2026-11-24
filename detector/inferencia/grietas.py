@@ -9,9 +9,9 @@ from .onnx import cargar_metadatos, cargar_sesion
 class PredictorGrietas:
     """Identificar los píxeles con probabilidad de grieta sobre el umbral."""
 
-    def __init__(self, ruta, hilos, *, leer_pesos=None):
+    def __init__(self, ruta, hilos):
         self.metadatos = cargar_metadatos(ruta)
-        self.sesion = cargar_sesion(ruta, self.metadatos["onnx_sha256"], hilos, leer_pesos=leer_pesos)
+        self.sesion = cargar_sesion(ruta, self.metadatos["onnx_sha256"], hilos)
 
     def predecir(self, imagen, *, umbral=None):
         """Aplicar el umbral indicado o el valor calibrado del modelo."""

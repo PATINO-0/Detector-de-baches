@@ -142,7 +142,7 @@ function recibirArchivo(lista) {
     if (lista.length > 1) return informar("Selecciona una sola imagen para analizar.", true);
     const nuevaImagen = lista[0];
     if (nuevaImagen.size > Number(formulario.dataset.maxBytes)) {
-        return informar(`La imagen debe pesar como máximo ${formulario.dataset.maxMb} MB.`, true);
+        return informar("La imagen debe pesar como máximo 10 MB.", true);
     }
     if (!/\.(jpe?g|png|webp)$/i.test(nuevaImagen.name) && !["image/jpeg", "image/png", "image/webp"].includes(nuevaImagen.type)) {
         return informar("Selecciona un archivo JPG, PNG o WebP.", true);

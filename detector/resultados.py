@@ -28,7 +28,7 @@ def marcar_bache(imagen, deteccion):
     cv2.putText(imagen, etiqueta, (x + 5, y + alto_texto + 4), TIPOGRAFIA, escala, COLOR_TEXTO, 1, cv2.LINE_AA)
 
 
-def imagen_anotada(imagen, baches, mascara, *, max_bytes=None):
+def imagen_anotada(imagen, baches, mascara):
     """Superponer la máscara de grietas y las cajas de baches en el mismo JPEG."""
     salida = imagen.copy()
     salida[mascara] = 0.40 * salida[mascara] + 0.60 * np.asarray(COLOR_GRIETA)
@@ -36,11 +36,7 @@ def imagen_anotada(imagen, baches, mascara, *, max_bytes=None):
         marcar_bache(salida, bache)
 
     bgr = cv2.cvtColor(salida, cv2.COLOR_RGB2BGR)
-    # Reducir la calidad solo si hace falta para enviar el JSON con base64.
-    for calidad in (92, 80, 65):
-        exito, jpeg = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, calidad])
-        if not exito:
-            raise RuntimeError("No se pudo codificar la imagen de resultado.")
-        if max_bytes is None or jpeg.nbytes <= max_bytes:
-            return "data:image/jpeg;base64," + b64encode(jpeg).decode("ascii")
-    raise RuntimeError("La imagen anotada supera el límite de respuesta.")
+    exito, jpeg = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    if not exito:
+        raise RuntimeError("No se pudo codificar la imagen de resultado.")
+    return "data:image/jpeg;base64," + b64encode(jpeg).decode("ascii")

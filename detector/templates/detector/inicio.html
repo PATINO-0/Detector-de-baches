@@ -42,8 +42,7 @@
                 </div>
 
                 <form id="formulario" action="{% url 'detector:analizar' %}" method="post" enctype="multipart/form-data"
-                      data-ejemplo="{{ url_ejemplo }}" data-max-bytes="{{ max_bytes_imagen|unlocalize }}"
-                      data-max-mb="{{ max_mb_imagen|unlocalize }}">
+                      data-ejemplo="{{ url_ejemplo }}" data-max-bytes="{{ max_bytes_imagen|unlocalize }}">
                     {% csrf_token %}
                     <div id="controles-archivo">
                         <label class="zona-archivo" id="zona-archivo" for="archivo">
@@ -53,7 +52,7 @@
                             <strong>Seleccionar imagen</strong>
                             <span>o arrástrala aquí</span>
                         </label>
-                        <p id="formatos-archivo" class="ayuda-archivo">JPG, PNG o WebP · hasta {{ max_mb_imagen }} MB</p>
+                        <p id="formatos-archivo" class="ayuda-archivo">JPG, PNG o WebP · hasta 10 MB</p>
                         <button id="analizar-archivo" class="boton primario" type="submit">Analizar imagen</button>
                         <button id="usar-ejemplo" class="boton texto" type="button" hidden>Usar imagen de ejemplo</button>
                     </div>

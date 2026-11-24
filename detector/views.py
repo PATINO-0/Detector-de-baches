@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
 
-from .imagenes import ImagenDemasiadoGrande, ImagenInvalida, leer_imagen, mensaje_limite_archivo
+from .imagenes import ImagenDemasiadoGrande, ImagenInvalida, leer_imagen
 from .servicio import analizar_imagen
 
 
@@ -26,10 +26,7 @@ def error_csrf(request, reason=""):
 
 @require_safe
 def inicio(request):
-    return render(request, "detector/inicio.html", {
-        "max_bytes_imagen": settings.MAX_BYTES_IMAGEN,
-        "max_mb_imagen": settings.MAX_MB_IMAGEN,
-    })
+    return render(request, "detector/inicio.html", {"max_bytes_imagen": settings.MAX_BYTES_IMAGEN})
 
 
 @never_cache
@@ -41,7 +38,7 @@ def analizar(request):
     try:
         archivo = request.FILES.get("imagen")
         if getattr(request, "imagen_demasiado_grande", False):
-            raise ImagenDemasiadoGrande(mensaje_limite_archivo())
+            raise ImagenDemasiadoGrande("La imagen debe pesar como máximo 10 MB.")
         if not archivo:
             return error_json("Selecciona una imagen o captura un fotograma.", 400)
         imagen = leer_imagen(archivo)

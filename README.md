@@ -21,32 +21,6 @@ Abre [RoadVision AI en localhost](http://localhost:8000/).
 
 El análisis se realiza en CPU y las solicitudes se procesan sin guardar un historial. La primera ejecución carga ambas sesiones ONNX. Django reutiliza las sesiones durante el resto del proceso.
 
-## Desplegar en Vercel con Supabase Storage
-
-1. En Supabase, abre **Storage → New bucket** y crea un bucket **privado** llamado `modelos`. Sube los archivos locales `modelos/baches.onnx` y `modelos/grietas.onnx` directamente a la raíz del bucket, con sus mismos nombres. El archivo de baches pesa unos 12,1 MB, así que el límite por archivo del bucket debe permitir ese tamaño. Los JSON de metadatos permanecen en el repositorio. [Configuración de buckets](https://supabase.com/docs/guides/storage/buckets/creating-buckets)
-2. En **SQL Editor**, ejecuta el contenido de [`supabase/modelos.sql`](supabase/modelos.sql). La política concede al rol `anon` la descarga de esos dos objetos por nombre. Cualquier persona con la URL del proyecto y su clave pública puede descargar esos dos pesos. [Políticas de Storage](https://supabase.com/docs/guides/storage/security/access-control)
-3. En Vercel, importa el repositorio con la raíz en `.` y el preset **Django**. Mantén la opción **Automatically expose System Environment Variables** para reconocer los dominios de producción y vista previa. Vercel detecta el WSGI de Django y ejecuta `collectstatic` durante la compilación. [Django en Vercel](https://vercel.com/docs/frameworks/full-stack/django) [Variables del sistema de Vercel](https://vercel.com/docs/environment-variables/system-environment-variables)
-4. En Vercel, abre **Settings → Environment Variables** y agrega estos valores antes de compilar. Usa los ámbitos **Production** y **Preview** según dónde quieras probar la aplicación. [`.env.example`](.env.example) incluye una plantilla para copiar los nombres.
-
-| Variable | Valor |
-| --- | --- |
-| `DJANGO_SECRET_KEY` | Una clave aleatoria para Django. Puedes generarla con el comando de abajo y pegarla directamente en Vercel. |
-| `DJANGO_DEBUG` | `0` |
-| `ROADVISION_ORIGEN_MODELOS` | `supabase` |
-| `SUPABASE_URL` | La URL del proyecto, por ejemplo `https://TU_PROYECTO.supabase.co`. |
-| `SUPABASE_MODELOS_BUCKET` | `modelos` |
-| `SUPABASE_ANON_KEY` | La clave pública `anon` heredada del proyecto. Si usas una clave `sb_publishable_…`, usa `SUPABASE_PUBLISHABLE_KEY` en su lugar. [Claves API de Supabase](https://supabase.com/docs/guides/getting-started/api-keys) |
-| `DJANGO_ALLOWED_HOSTS` | Opcional. Agrega dominios personalizados adicionales sin `https://`, separados por comas. |
-| `ROADVISION_HILOS` | Opcional. Vercel usa `2` por defecto. |
-
-```powershell
-.\.venv\Scripts\python.exe -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
-
-Despliega y prueba **Analizar imagen** con el ejemplo. La primera solicitud de análisis de cada instancia descarga los ONNX, verifica su SHA-256 y carga las sesiones en memoria. Los análisis de esa instancia reutilizan las sesiones. La cámara funciona desde el dominio HTTPS de Vercel. La carga de archivos admite hasta **4 MB en Vercel** y hasta **10 MB en local**. [Límites de Vercel Functions](https://vercel.com/docs/functions/limitations)
-
-Para revisar el despliegue, comparte la URL del proyecto de Supabase, el nombre del bucket y la URL de Vercel cuando esté disponible. Las claves se cargan directamente en Vercel. Puedes seguir ejecutando Django en local con los archivos de `modelos/` y la configuración local por defecto.
-
 ## Modelos incluidos
 
 | Archivo | Modelo y configuración |

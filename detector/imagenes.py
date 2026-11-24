@@ -14,10 +14,6 @@ class ImagenDemasiadoGrande(ImagenInvalida):
     """La imagen supera el presupuesto de bytes o píxeles."""
 
 
-def mensaje_limite_archivo():
-    return f"La imagen debe pesar como máximo {settings.MAX_MB_IMAGEN} MB."
-
-
 class LimiteCargaImagen(FileUploadHandler):
     """Interrumpir el almacenamiento de un archivo que sobrepasa el límite."""
 
@@ -34,7 +30,7 @@ class LimiteCargaImagen(FileUploadHandler):
 def leer_imagen(archivo):
     """Obtener RGB de una imagen estática respetando su orientación EXIF."""
     if archivo.size > settings.MAX_BYTES_IMAGEN:
-        raise ImagenDemasiadoGrande(mensaje_limite_archivo())
+        raise ImagenDemasiadoGrande("La imagen debe pesar como máximo 10 MB.")
 
     try:
         with Image.open(archivo, formats=("JPEG", "PNG", "WEBP")) as imagen:
