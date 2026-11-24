@@ -1,5 +1,10 @@
+# Excluimos el entorno virtual local que recreamos desde requirements.txt.
 /.venv/
+# Excluimos los archivos estáticos generados por collectstatic.
 /.static/
+# Excluimos las carpetas de bytecode que genera Python al importar.
 __pycache__/
+# Excluimos los archivos Python compilados de forma individual.
 *.py[cod]
+# Excluimos el archivo de variables locales si se utiliza para guardar configuración.
 /.env

@@ -1,5 +1,10 @@
+# Instalamos Django 5.2 para rutas, vistas, plantillas, CSRF y archivos estáticos.
 Django>=5.2,<5.3
+# Usamos NumPy 2 para construir tensores y operar sobre píxeles y candidatos.
 numpy>=2.1,<3
+# Abrimos y ejecutamos en CPU los dos grafos con ONNX Runtime.
 onnxruntime>=1.32,<2
+# Usamos la distribución de OpenCV sin dependencias de ventanas para procesar y codificar imágenes.
 opencv-python-headless>=4.10,<5
+# Decodificamos JPG, PNG y WebP, y aplicamos la orientación EXIF con Pillow.
 Pillow>=11.3,<13

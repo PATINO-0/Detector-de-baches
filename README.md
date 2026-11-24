@@ -1,10 +1,88 @@
-# RoadVision AI
+# RoadVision AI · Detector de baches y grietas
 
-Aplicación Django en español para analizar el pavimento. Los dos modelos del repositorio se ejecutan sobre cada imagen. Los baches se muestran con cajas y una puntuación de confianza. Las grietas se resaltan con una máscara y se informa qué porcentaje de la imagen ocupan.
+Desarrollamos RoadVision AI para inspeccionar visualmente el pavimento a partir de fotografías y fotogramas de cámara web. Procesamos cada imagen con dos modelos propios. Localizamos los baches con cajas y puntuaciones de confianza, y segmentamos las grietas por píxel. Mostramos ambas salidas sobre el mismo JPEG para que se puedan comparar con la fuente original y descargar.
 
-## Ejecutar en Windows
+## Contenido
 
-Desde la raíz del proyecto, con Python de 64 bits. La aplicación se verificó con Python 3.13.
+- [Alcance y conceptos](#alcance-y-conceptos)
+- [Conceptos clave para interpretar el análisis](#conceptos-clave-para-interpretar-el-análisis)
+- [Tecnologías](#tecnologías)
+- [Instalación y uso](#instalación-y-uso)
+- [Implementación paso a paso](#implementación-paso-a-paso)
+- [Modelos y métricas](#modelos-y-métricas)
+- [Mapa del código](#mapa-del-código)
+- [Contrato HTTP](#contrato-http)
+- [Configuración y despliegue](#configuración-y-despliegue)
+- [Verificación y diagnóstico](#verificación-y-diagnóstico)
+
+## Alcance y conceptos
+
+| Concepto | Cómo lo aplicamos |
+| --- | --- |
+| Bache | Localizamos una depresión o cavidad visible en el pavimento mediante una **caja delimitadora**. Cada caja representa una predicción del detector. |
+| Grieta | Identificamos zonas con fisuras visibles. El segmentador asigna una probabilidad a cada píxel y construimos una **máscara booleana** con el umbral operativo. |
+| Inferencia | Ejecutamos los grafos exportados con sus pesos entrenados. La aplicación recibe una imagen, prepara sus tensores y transforma las salidas en datos interpretables. |
+| Confianza de una caja | Presentamos la puntuación que entrega YOLOv8n para una caja concreta. La usamos para ordenar candidatos y decidir cuáles pasan el filtro inicial. |
+| Cobertura de grietas | Dividimos los píxeles marcados por el total de píxeles de la imagen analizada y multiplicamos por 100. La unidad es porcentaje de la imagen completa. |
+| Modelo y datos de entrenamiento | Integramos las exportaciones de dos entrenamientos propios. Conservamos los metadatos que identifican las épocas seleccionadas, los parámetros y las métricas disponibles. |
+
+Asignamos **ámbar** a los baches y **magenta** a las grietas. El conteo de baches corresponde a cajas después de la supresión de solapamientos. La máscara de grietas puede representar varias fisuras conectadas o separadas, por lo que informamos su cobertura en píxeles.
+
+## Conceptos clave para interpretar el análisis
+
+### Datos, entrenamiento y evaluación
+
+| Concepto | Cómo lo aplicamos |
+| --- | --- |
+| **Anotación de referencia** (*ground truth*) | Comparamos las predicciones con daños etiquetados. Para baches usamos cajas de referencia. Para grietas usamos máscaras de referencia por píxel. |
+| **Entrenamiento, validación y prueba** | Usamos entrenamiento para ajustar los pesos y validación para comparar configuraciones y seleccionar umbrales. Reservamos la partición de prueba para medir el desempeño de una configuración elegida. |
+| **Época y checkpoint** | Llamamos época a una pasada por el conjunto de entrenamiento. Un checkpoint guarda el estado del modelo en un punto del entrenamiento. Exportamos a ONNX las versiones seleccionadas para la aplicación. |
+| **Fuga de datos** | Al planear una evaluación independiente, agrupamos las escenas repetidas o los fotogramas muy próximos de un mismo recorrido en una sola partición. Así evitamos que el modelo sea evaluado con escenas que ya vio al entrenarse. |
+| **Generalización** | Evaluamos con escenas representativas de las condiciones de uso. Consideramos diferencias de iluminación, textura del pavimento, distancia, ángulo y movimiento de la cámara, porque pueden cambiar el desempeño respecto del conjunto de referencia. |
+
+### Confianza, umbral y cobertura
+
+- Usamos la **confianza** de cada caja para filtrar esa predicción. Una confianza de `0.68` describe la puntuación de esa caja. Calculamos la precisión del modelo sobre un conjunto de predicciones con anotaciones de referencia.
+- El **umbral operativo** decide qué candidatos o píxeles entran al resultado. En baches lo aplicamos antes de la supresión de cajas. En grietas lo aplicamos a cada píxel del mapa reescalado. Al bajar el umbral podemos recuperar daños de menor puntuación y admitir más marcas erróneas.
+- Para calcular la **cobertura**, usamos como denominador el total de píxeles de la imagen analizada. Una máscara con 2.000 píxeles marcados en una imagen de 200.000 píxeles tiene una cobertura del **1 %**. Para estimar un área física del pavimento necesitaríamos una escala y una calibración de la perspectiva.
+
+Si el modelo marca **10 cajas**, **8** coinciden con baches distintos y la imagen contiene **12** baches de referencia, obtenemos **80 % de precisión** (`8 / 10`) y **66,67 % de sensibilidad** (`8 / 12`). Para determinar cuáles cajas coinciden, medimos el IoU entre predicción y anotación. En la supresión de cajas duplicadas usamos el IoU entre dos predicciones del modelo.
+
+### Píxeles, coordenadas y resolución
+
+- En el **tensor de entrada**, organizamos los píxeles RGB en ejes de lote, canal, alto y ancho. Ambas redes reciben un lote unitario y valores normalizados de 0 a 1. Cada modelo espera su propio tamaño de entrada.
+- Distinguimos **tres resoluciones**. Una foto orientada de **2.400 × 1.200 px** se reduce a **1.600 × 800 px** antes de construir las entradas de **768 × 768 px** y **384 × 384 px**. Recuperamos las cajas y la máscara en la resolución analizada de **1.600 × 800 px**.
+- En el **sistema de coordenadas**, contamos `x` desde la izquierda y `y` desde arriba. Al dibujar resultados en otra resolución, usamos la transformación entre la imagen analizada y el área donde se muestra. Incluimos el ancho y el alto en la respuesta para poder reconstruir esa correspondencia.
+
+### Validación de la aplicación y del modelo
+
+Comprobamos dos aspectos por separado. En la aplicación verificamos que la foto o el fotograma llegue a Django y que podamos ver y descargar el resultado. En los modelos medimos la coincidencia con imágenes etiquetadas. Para repetir una medición registramos la versión y el SHA-256 de los ONNX, los umbrales, el preprocesamiento, la resolución evaluada y la partición utilizada. [Modelos y métricas](#modelos-y-métricas) · [Verificación y diagnóstico](#verificación-y-diagnóstico)
+
+## Tecnologías
+
+| Tecnología | Responsabilidad y motivo de uso |
+| --- | --- |
+| **Python 3.13** | Verificamos el entorno de ejecución con esta versión. Escribimos en Python las rutas, la validación, los predictores y la generación de resultados. |
+| **Django 5.2** | Usamos rutas, vistas, plantillas, archivos estáticos, middleware de seguridad y validación CSRF en una sola aplicación web. |
+| **HTML5 y plantillas Django** | Renderizamos la interfaz, resolvemos las rutas de los recursos y publicamos el token CSRF y el límite de archivo. |
+| **CSS** | Usamos Grid y Flexbox para distribuir los paneles, y media queries para adaptar el visor y los controles a pantallas estrechas. |
+| **JavaScript con módulos ES** | Controlamos la interfaz, la selección de archivos, la cámara y el análisis asíncrono con las APIs nativas del navegador. |
+| **ONNX y ONNX Runtime** | Empaquetamos los grafos y pesos en ONNX. Ejecutamos la inferencia con el proveedor de CPU de ONNX Runtime. |
+| **NumPy** | Representamos píxeles y tensores, calculamos áreas y solapamientos y aplicamos la máscara mediante operaciones vectorizadas. |
+| **OpenCV sin interfaz gráfica** | Reescalamos imágenes y probabilidades, dibujamos cajas y texto y codificamos la salida JPEG en el servidor. |
+| **Pillow** | Abrimos imágenes JPEG, PNG y WebP, verificamos sus dimensiones y corregimos la orientación EXIF antes de producir RGB. |
+| **Vercel y WSGI** | Publicamos la aplicación y sus recursos estáticos con el soporte de Django de Vercel. WSGI es la interfaz entre el servidor HTTP y la aplicación Python. |
+| **Git y pip** | Versionamos código, metadatos y pesos, y declaramos las dependencias de ejecución en `requirements.txt`. |
+
+El archivo [requirements.txt](requirements.txt) establece los rangos compatibles de Django, NumPy, ONNX Runtime, OpenCV y Pillow. Para entender el motor de ejecución y su proveedor de CPU, consultamos la [referencia de ONNX Runtime](https://onnxruntime.ai/docs/api/python/api_summary.html).
+
+## Instalación y uso
+
+### Preparar el entorno
+
+Partimos de la raíz del repositorio. Usamos Python de 64 bits y mantenemos las dependencias en un entorno virtual. Los dos pesos ONNX y sus archivos JSON están en `modelos/`. El análisis lee estos archivos directamente y la configuración del proyecto prescinde de una base de datos.
+
+En **Windows PowerShell** usamos el intérprete del entorno virtual.
 
 ```powershell
 python -m venv .venv
@@ -13,44 +91,340 @@ python -m venv .venv
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Abre [RoadVision AI en localhost](http://localhost:8000/).
+En **Linux** usamos las rutas del entorno virtual de ese sistema.
 
-- En **Archivo**, pulsa **Analizar imagen** para probar el ejemplo o selecciona o arrastra una fotografía JPG, PNG o WebP de hasta 10 MB y 24 megapíxeles.
-- En **Cámara web**, pulsa **Activar cámara** y concede permiso. Puedes analizar un fotograma o iniciar el análisis en vivo, que envía un fotograma a la vez. **Original** muestra la cámara en directo y **Detecciones** muestra el último fotograma analizado. Usa `localhost` o HTTPS para que el navegador permita el acceso. [Requisitos de acceso a la cámara en el navegador](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia#privacy_and_security)
-- Puedes alternar entre la fuente original y el resultado y descargar el JPEG anotado. Las imágenes de archivo se orientan según los metadatos EXIF y se reducen proporcionalmente a 1.600 píxeles en el lado mayor si exceden ese tamaño.
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python manage.py check
+.venv/bin/python manage.py runserver
+```
 
-El análisis se realiza en CPU y las solicitudes se procesan sin guardar un historial. La primera ejecución carga ambas sesiones ONNX. Django reutiliza las sesiones durante el resto del proceso.
+Abrimos [RoadVision AI en localhost](http://localhost:8000/). Usamos `manage.py check` para revisar la configuración y el análisis del ejemplo para comprobar que los pesos se cargan y ambas sesiones ejecutan inferencia.
 
-## Ejecutar en Vercel
+### Analizar una fotografía
 
-Vercel puede ejecutar Django con los archivos ONNX de `modelos/` incluidos en el proyecto. El análisis lee esos archivos directamente y funciona sin base de datos. [Django en Vercel](https://vercel.com/docs/frameworks/full-stack/django)
+1. Abrimos **Archivo**. Pulsamos **Seleccionar imagen** o arrastramos un JPG, PNG o WebP estático. Podemos pulsar **Analizar imagen** directamente para usar el ejemplo de la aplicación.
+2. Revisamos la vista previa y pulsamos **Analizar imagen**. El archivo ocupa un solo campo del formulario.
+3. Consultamos el conteo de baches y el porcentaje de cobertura. Si tenemos cajas, abrimos **Confianza por detección de bache** para ver sus puntuaciones.
+4. Alternamos entre **Original** y **Detecciones**. Usamos **Descargar imagen anotada** para guardar el JPEG combinado.
 
-En **Settings → Environment Variables**, habilita **Automatically expose System Environment Variables** para que Django reconozca los dominios de producción y vista previa y el HTTPS del proxy. Agrega los dominios personalizados adicionales a `DJANGO_ALLOWED_HOSTS`, separados por comas y sin `https://`. Vuelve a desplegar después de cambiar las variables. [Variables de Vercel](https://vercel.com/docs/environment-variables/system-environment-variables)
+### Analizar desde cámara web
 
-## Modelos incluidos
+1. Elegimos **Cámara web**, pulsamos **Activar cámara** y autorizamos el vídeo en el navegador. Ejecutamos el sitio desde `localhost` o HTTPS para que el navegador permita la solicitud. [Requisitos de acceso a la cámara](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
+2. En **Analizar un fotograma**, el navegador toma la imagen que se está reproduciendo y la envía por la misma ruta que usamos para una foto.
+3. En **Analizar en vivo**, esperamos cada respuesta antes de programar la siguiente captura. Añadimos una espera de **450 ms** después de una respuesta exitosa. La frecuencia depende de la cámara, la codificación, la red y la inferencia.
+4. En modo cámara, **Original** muestra el vídeo en directo y **Detecciones** muestra el último fotograma que terminó de procesarse. **Detener análisis en vivo** para el envío periódico. **Apagar cámara**, cambiar de fuente o salir de la página libera las pistas de vídeo.
 
-| Archivo | Modelo y configuración |
+Solicitamos vídeo sin audio. Preferimos la cámara trasera cuando existe y pedimos una resolución ideal de 1.280 por 720 píxeles. La captura se codifica como JPEG con calidad solicitada de 0,9 y se reduce proporcionalmente cuando su lado mayor supera 1.280 píxeles.
+
+### Límites y tratamiento de imágenes
+
+| Operación | Criterio que aplicamos |
 | --- | --- |
-| `modelos/baches.onnx` y `modelos/baches.json` | Detector RoadVisionAI V6 basado en YOLOv8n. Usa la exportación de la época 10 de la corrida de continuación iniciada con el checkpoint propio de `v6_rtx4060ti_desde_cero`. La inferencia usa entradas de 768 píxeles, tres vistas TTA e IoU de 0,60 para la supresión de cajas solapadas. El umbral del informe original fue 0,4863. |
-| `modelos/grietas.onnx` y `modelos/grietas.json` | CrackUNet entrenado desde cero con Crack-Seg. Usa la exportación de la época 20 con entrada de 384 píxeles. El umbral del informe original fue 0,85. |
+| Selección en navegador | Comprobamos la cantidad de archivos, el límite en bytes y la extensión o el tipo MIME como filtro inicial. |
+| Subida a Django | Limitamos cada archivo a **10 MiB** (10.485.760 bytes). El manejador de carga interrumpe el archivo al superar ese tamaño. |
+| Validación del contenido | Pillow abre únicamente JPEG, PNG y WebP. Rechazamos las imágenes animadas y limitamos la imagen original a **24 millones de píxeles**. |
+| Orientación | Aplicamos EXIF antes de obtener la matriz RGB. |
+| Resolución de análisis | Reducimos el lado mayor a **1.600 píxeles** cuando hace falta y mantenemos la proporción. Las coordenadas y la máscara corresponden a esta imagen. |
+| Persistencia | Procesamos la imagen para responder a la solicitud y usamos los manejadores de memoria o archivos temporales de Django. La aplicación prescinde de un historial de análisis. |
+| Formato de salida | Codificamos un JPEG de calidad 92 y lo devolvemos como URL de datos en JSON. El navegador puede mostrarlo o descargarlo con el nombre `roadvision-detecciones.jpg`. |
 
-Los pesos y metadatos proceden de los paquetes `RoadVisionAI_Baches_V6` y `RoadVisionAI_Grietas`. Se valida el SHA-256 de cada ONNX al cargarlo. La instalación incluye los cuatro archivos necesarios para la inferencia y usa ONNX Runtime para ambos modelos.
+Django aplica sus propios límites de formulario además del límite del archivo. Vercel puede aplicar un límite de cuerpo de solicitud o respuesta antes de que Django procese la imagen. [Carga de archivos en Django](https://docs.djangoproject.com/en/5.2/topics/http/file-uploads/) · [Límites de Vercel Functions](https://vercel.com/docs/functions/limitations)
 
-La aplicación usa los umbrales definidos en `roadvision/settings.py` para archivos y cámara. `UMBRAL_CONFIANZA_BACHES = 0.15` admite cajas con puntuaciones como 0,18 si pasan la supresión de solapamientos. `UMBRAL_SEGMENTACION_GRIETAS = 0.947` exige una probabilidad de al menos 0,947 por píxel. Las métricas de los JSON corresponden a sus respectivos umbrales originales.
+## Implementación paso a paso
 
-## Estructura
+Ambas fuentes usan el mismo servicio de Django. Unificamos la validación y el contrato de respuesta para aplicar los mismos criterios a una fotografía y a un fotograma.
 
-| Ruta | Función |
+```mermaid
+flowchart LR
+    foto[Foto o ejemplo] --> api[POST de análisis]
+    camara[Fotograma JPEG] --> api
+    api --> rgb[Validación y conversión a RGB]
+    rgb --> baches[YOLOv8n · cajas]
+    rgb --> grietas[CrackUNet · máscara]
+    baches --> salida[JPEG anotado y métricas en JSON]
+    grietas --> salida
+    salida --> visor[Visor, métricas y descarga]
+```
+
+1. **Construimos la interfaz.** La vista de inicio resuelve la plantilla con la URL de análisis, el archivo de ejemplo, el token CSRF y el límite de archivo. Organizamos el espacio en tres paneles y vinculamos sus identificadores con los módulos JavaScript.
+2. **Unificamos la entrada.** Convertimos la captura de cámara a un Blob JPEG y descargamos el ejemplo como Blob cuando se solicita. El usuario conserva la vista previa del archivo local mediante una URL de objeto. Todas las imágenes salen en un `FormData` con el campo `imagen` y el token `X-CSRFToken`.
+3. **Validamos la solicitud.** Django comprueba CSRF antes de llamar a la vista de análisis. Dentro de la vista validamos el método y el archivo, corregimos la orientación y obtenemos una matriz `uint8` de alto por ancho por tres canales RGB.
+4. **Cargamos los grafos.** Abrimos los pesos locales, comparamos el SHA-256 con el JSON y creamos una sesión ONNX Runtime por predictor. Usamos un candado durante el acceso inicial a una caché de un par de modelos por proceso. Liberamos el candado antes de ejecutar la inferencia de la imagen.
+5. **Ejecutamos ambos modelos.** Aplicamos la detección de baches y la segmentación de grietas a la misma matriz RGB, con los umbrales que centralizamos en Django. Cada predictor transforma la entrada según su tamaño y recupera la geometría de la imagen analizada.
+6. **Componemos la salida.** Copiamos la imagen, pintamos la máscara de grietas y luego dibujamos las cajas ámbar y sus etiquetas. Convertimos a BGR para que OpenCV codifique correctamente los colores del JPEG. Calculamos la cobertura a partir de la máscara booleana antes de la codificación.
+7. **Presentamos el resultado.** JavaScript actualiza el visor, las métricas, el desplegable y el enlace de descarga. Cancelamos solicitudes que quedan obsoletas al cambiar de fuente y descartamos respuestas que llegan después de la cancelación.
+
+### Detección de baches con YOLOv8n
+
+Usamos la época 10 de RoadVisionAI V6 Continuación. El grafo ONNX devuelve candidatos de una clase con el formato `[lote, 5, candidatos]`. Los cinco valores por candidato son centro horizontal y vertical, ancho, alto y confianza.
+
+1. Aplicamos **letterbox**. Escalamos de forma uniforme y centramos la foto en un lienzo de **768 × 768** con relleno gris RGB 114. Guardamos los desplazamientos y la escala efectiva de cada eje para poder deshacer el redondeo.
+2. Convertimos el orden de la imagen `HWC` (alto, ancho, canales) a `NCHW` (lote, canales, alto, ancho). Agregamos un lote de tamaño uno, usamos `float32` contiguo y dividimos entre 255.
+3. Aplicamos **TTA** (*Test-Time Augmentation* o aumentos durante la inferencia). Ejecutamos el mismo grafo con las escalas **1,0**, **0,83 con volteo horizontal** y **0,67**. Alineamos las vistas reducidas a múltiplos de 32 con relleno normalizado `0.447`. Deshacemos los aumentos y recortamos las colas de candidatos de las vistas extremas según el protocolo original.
+4. Conservamos candidatos finitos con confianza **mayor que 0,15** y limitamos a 30.000 el conjunto que ordenamos por confianza. Convertimos centro y tamaño en coordenadas de esquina `[x1, y1, x2, y2]`.
+5. Aplicamos **NMS** (*Non-Maximum Suppression* o supresión de no máximos). Tomamos la caja de mayor confianza y descartamos candidatos con **IoU mayor que 0,60** respecto de ella. El IoU de cajas es el área de intersección dividida por el área de unión. Conservamos hasta **300** cajas.
+6. Restamos el relleno, deshacemos las escalas y recortamos las cajas a los límites de la imagen original del análisis. Entregamos cajas, clase y confianza en el JSON.
+
+Por ejemplo, una caja con confianza `0.18` supera el filtro de `0.15`. Su inclusión final depende de la supresión por solapamiento y el máximo de cajas. El JSON del modelo contiene el umbral histórico de la exportación, usado por el predictor cuando se invoca sin una anulación explícita.
+
+### Segmentación de grietas con CrackUNet
+
+Usamos la época 20 de CrackUNet, una arquitectura U-Net de segmentación binaria con ancho base 16. Para esta tarea, el modelo estima una probabilidad de pertenencia a la clase grieta por píxel.
+
+1. Reescalamos la foto y la centramos con relleno gris en un cuadrado de **384 × 384**. Recordamos exactamente la región que pertenece a la foto.
+2. Alimentamos la entrada `images` con un tensor RGB `NCHW` de lote uno, tipo `float32` y valores normalizados por 255.
+3. Extraemos el mapa `probabilities` del grafo. Retiramos el relleno del mapa y lo interpolamos al ancho y alto de la imagen analizada.
+4. Aplicamos el umbral operativo con la comparación **mayor o igual que 0,947**. Obtenemos una máscara donde cada valor verdadero marca un píxel de grieta.
+5. Pintamos los píxeles verdaderos usando **60 % magenta y 40 % del color original**. Dividimos el número de píxeles verdaderos entre el tamaño total de la máscara para calcular el porcentaje de cobertura.
+
+Aumentar el umbral exige una puntuación mayor y reduce el conjunto de píxeles marcados. Entre los píxeles que descartamos puede haber tanto falsos positivos como grietas reales de menor puntuación.
+
+## Modelos y métricas
+
+### Archivos y procedencia
+
+| Archivo | Contenido |
 | --- | --- |
-| `roadvision/` | Configuración de Django, límites de entrada y rutas principales. |
-| `detector/imagenes.py` | Validación del archivo, orientación y conversión a RGB. |
-| `detector/inferencia/` | Carga de sesiones ONNX y preprocesamiento y posprocesamiento de cada modelo. |
-| `detector/servicio.py` | Ejecución de ambos modelos y cálculo del resumen de detecciones. |
-| `detector/resultados.py` | Dibujo de cajas y máscara sobre la imagen. |
-| `detector/templates/` y `detector/static/` | Interfaz adaptable, carga de imágenes y captura desde el navegador. |
+| [baches.onnx](modelos/baches.onnx) | Grafo y pesos de detección exportados de YOLOv8n. Pesa 12.092.275 bytes. |
+| [baches.json](modelos/baches.json) | Ficha de detección con parámetros, métricas históricas de test y huellas de exportación. |
+| [grietas.onnx](modelos/grietas.onnx) | Grafo y pesos de segmentación CrackUNet. Pesa 1.956.379 bytes. |
+| [grietas.json](modelos/grietas.json) | Ficha del segmentador con parámetros, procedencia del dataset, validación, prueba y huella ONNX. |
 
-`POST /api/analizar/` recibe un formulario `multipart/form-data` con el campo `imagen` y el token CSRF. Devuelve las cajas `box_xyxy` referidas a la resolución analizada, el porcentaje de píxeles de grieta y la imagen JPEG anotada.
+Integramos el detector a partir de la corrida de continuación iniciada con el checkpoint propio `v6_rtx4060ti_desde_cero`. Integramos el segmentador entrenado desde cero con Crack-Seg. Sus metadatos registran **3.717 imágenes de entrenamiento**, **200 de validación** y **111 de prueba**, además de la exclusión de un duplicado. El conjunto incluye imágenes de carreteras y paredes. [Descripción de Crack-Seg](https://docs.ultralytics.com/datasets/segment/crack-seg/)
 
-Puedes cambiar el directorio de los modelos con `ROADVISION_MODELOS` y los hilos de inferencia por sesión con `ROADVISION_HILOS`.
+Los JSON usan sintaxis JSON estándar. Documentamos sus campos aquí y validamos cada huella al abrir el archivo ONNX correspondiente.
 
-La fotografía de ejemplo es de Editor5807 y se distribuye en dominio público según Wikimedia Commons. [Ficha de la fotografía](https://commons.wikimedia.org/wiki/File:Emerging_pot_hole.JPG)
+### Campos de `baches.json`
+
+| Campo | Uso o significado |
+| --- | --- |
+| `schema_version` | Identificamos la versión de la estructura de la ficha. |
+| `model` y `selected_epoch` | Identificamos la corrida YOLOv8n Continuación y su época seleccionada. |
+| `labels` y `source_names` | Registramos la clase `Bache` y su asociación con el índice 0 del modelo de origen. |
+| `image_size` | Leemos el lado base de entrada de 768 píxeles. |
+| `confidence` | Conservamos el umbral histórico de aproximadamente `0.4863` como valor predeterminado del predictor cuando se llama directamente. |
+| `nms_iou` y `max_det` | Leemos el límite de solapamiento de `0.6` y el máximo de 300 cajas. |
+| `input.onnx_pt_layout` y `input.keras_layout` | Describimos el orden de ejes de las exportaciones ONNX/PT y Keras. En la aplicación usamos `NCHW`. |
+| `input.dtype`, `input.color` y `input.normalization` | Registramos `float32`, RGB y división por 255. |
+| `input.letterbox_pad`, `input.spatial_dimensions` y `input.dynamic_batch` | Registramos el gris de relleno, los múltiplos de 32 y la capacidad de lote dinámico del grafo. La aplicación usa un elemento por imagen. |
+| `output.layout`, `output.channels` y `output.coordinates` | Documentamos la forma de la salida, los cinco valores por candidato y su referencia al lienzo rellenado. |
+| `tta.enabled_by_default`, `tta.scales` y `tta.horizontal_flip` | Indicamos el uso de TTA y leemos las escalas y volteos de las vistas. |
+| `tta.stride`, `tta.view_padding_normalized` y `tta.augmented_tail_clipping` | Describimos la alineación de 32, el relleno `0.447` y el recorte que reproducimos en el predictor. |
+| `historical_test_metrics.images`, `targets` y `requires_tta` | Registramos las 1.293 imágenes, los 3.314 objetos anotados y el requisito de TTA del informe original. |
+| `historical_test_metrics.precision`, `recall`, `F1`, `mAP50` y `mAP50_95` | Conservamos los indicadores históricos del detector, detallados en la tabla de métricas. |
+| `verification_protocol` | Describimos la verificación de equivalencia FP32 de la exportación. |
+| `source_checkpoint_sha256` y `sha256` | Registramos las huellas del checkpoint y las exportaciones PT, Keras y ONNX. Para cargar Django usamos `sha256["baches.onnx"]`. |
+
+### Campos de `grietas.json`
+
+| Campo | Uso o significado |
+| --- | --- |
+| `schema_version`, `task` y `labels` | Identificamos la versión de ficha, la segmentación semántica binaria y la clase `Grieta`. |
+| `architecture`, `width` y `best_epoch` | Registramos CrackUNet, su ancho base de 16 y la época 20. |
+| `image_size` y `threshold` | Leemos la entrada de 384 píxeles y el umbral histórico `0.85`, que el predictor utiliza si se llama sin una anulación explícita. |
+| `input.onnx_layout` y `input.keras_layout` | Documentamos los órdenes `NCHW` y `NHWC` de las exportaciones. En la aplicación usamos `NCHW`. |
+| `input.dtype`, `input.color` y `input.scale` | Registramos `float32`, RGB y el factor de normalización de `1/255`. |
+| `input.letterbox_pad` | Leemos el gris de relleno 114 para el lienzo de inferencia. |
+| `output` y `metrics_protocol` | Describimos el mapa por píxel y el protocolo de las métricas de referencia, que agrega píxeles válidos en la resolución de entrada. |
+| `dataset.url` y `dataset.sha256` | Identificamos el origen del conjunto de datos y la huella de su archivo. |
+| `dataset.images.train`, `val` y `test` | Registramos la cantidad de imágenes en cada división. |
+| `dataset.includes_road_and_wall_cracks` y `excluded_duplicates` | Registramos la composición del conjunto y la cantidad de duplicados excluidos. |
+| `validation` y `test` | Conservamos umbral, precisión, sensibilidad, Dice e IoU, y los conteos de píxeles `tp_pixels`, `fp_pixels`, `fn_pixels` y `tn_pixels` para cada división. |
+| `verification.real_images`, `onnx_max_absolute_error` y `keras_max_absolute_error` | Registramos cuatro imágenes y el máximo error absoluto medido para las exportaciones. |
+| `onnx_sha256` | Verificamos la integridad del grafo antes de crear la sesión de grietas. |
+
+### Interpretación de métricas
+
+| Métrica | Qué medimos |
+| --- | --- |
+| Verdadero positivo (TP) | Predicción que coincide con una anotación según el criterio de evaluación. |
+| Falso positivo (FP) | Caja o píxel marcado como daño que queda fuera del criterio de coincidencia. |
+| Falso negativo (FN) | Daño anotado que el modelo no recuperó. |
+| Verdadero negativo (TN) | Píxel de fondo que el segmentador conservó como fondo. |
+| Precisión | Calculamos `TP / (TP + FP)` para saber qué proporción de las marcas coincide con las etiquetas. |
+| Sensibilidad o *recall* | Calculamos `TP / (TP + FN)` para saber qué proporción del daño anotado se recuperó. |
+| F1 y Dice | Combinamos precisión y sensibilidad con `2 × TP / (2 × TP + FP + FN)`. En la ficha de grietas se registra como `F1_Dice` sobre los píxeles válidos. |
+| IoU | Medimos intersección dividida por unión. La coincidencia puede referirse a cajas en detección o a conjuntos de píxeles en segmentación. |
+| mAP50 y mAP50–95 | Usamos la precisión media de detección. mAP50 evalúa con IoU de 0,50. mAP50–95 promedia el resultado con diez umbrales de IoU, de 0,50 a 0,95 en pasos de 0,05. |
+
+| Evaluación original | Precisión | Sensibilidad | F1 o Dice | Otras métricas |
+| --- | ---: | ---: | ---: | --- |
+| Baches · 1.293 imágenes de test | 79,22 % | 65,93 % | 71,97 % | mAP50 73,12 % y mAP50–95 42,71 % |
+| Grietas · 200 imágenes de validación a 384 px | 73,70 % | 76,87 % | 75,25 % | IoU 60,32 % |
+| Grietas · 111 imágenes de test a 384 px | 71,58 % | 73,67 % | 72,61 % | IoU 57,00 % |
+
+Tomamos estas cifras de los metadatos incluidos. La evaluación de baches usa las tres vistas del protocolo histórico. La de grietas usa `0.85` y cuenta los píxeles a **384 px**. Los umbrales operativos actuales son **0,15** para baches y **0,947** para grietas. Al comparar versiones, registramos el conjunto etiquetado, el umbral y la resolución, porque esas decisiones afectan la cantidad de marcas y las métricas. [Métricas de detección YOLO](https://docs.ultralytics.com/guides/yolo-performance-metrics/)
+
+
+## Mapa del código
+
+### Entrada, configuración y HTTP
+
+| Archivo | Qué implementamos |
+| --- | --- |
+| [manage.py](manage.py) | Seleccionamos `roadvision.settings` y entregamos los argumentos a `execute_from_command_line`. Lo usamos con `check`, `runserver` y `collectstatic`. |
+| [roadvision/__init__.py](roadvision/__init__.py) | Delimitamos el paquete de configuración del proyecto. |
+| [roadvision/settings.py](roadvision/settings.py) | Declaramos el entorno, los hosts, el proxy HTTPS de Vercel, el idioma, los middlewares, las plantillas, los estáticos, los parámetros operativos de modelos y los límites de subida. |
+| [roadvision/urls.py](roadvision/urls.py) | Montamos el enrutador de `detector` en la raíz. |
+| [roadvision/wsgi.py](roadvision/wsgi.py) | Inicializamos Django y exponemos el objeto `application` que llama el servidor WSGI. |
+| [detector/__init__.py](detector/__init__.py) | Delimitamos la aplicación de inspección vial. |
+| [detector/urls.py](detector/urls.py) | Registramos `detector:inicio` y `detector:analizar` con nombres que resuelve la plantilla. |
+| [detector/views.py](detector/views.py) | Traducimos las peticiones HTTP al flujo de la aplicación y convertimos respuestas y errores a HTML o JSON. |
+
+| Vista o función | Responsabilidad |
+| --- | --- |
+| `inicio(request)` | Atendemos `GET` y `HEAD`, renderizamos la pantalla inicial y enviamos el límite en bytes. |
+| `analizar(request)` | Exigimos `POST`, leemos el campo `imagen`, atendemos el indicador de carga truncada, decodificamos y delegamos al servicio. Deshabilitamos la caché de respuestas del análisis. |
+| `error_json(mensaje, estado, **encabezados)` | Unificamos los errores de la API en un objeto con el campo `error` y el estado HTTP correspondiente. |
+| `error_csrf(request, reason="")` | Devolvemos un 403 comprensible cuando Django rechaza la solicitud por CSRF. El middleware registra el motivo técnico. |
+
+### Entrada de imágenes, inferencia y salida
+
+| Archivo | Clases y funciones que implementamos |
+| --- | --- |
+| [detector/imagenes.py](detector/imagenes.py) | Definimos `ImagenInvalida` para errores de lectura o formato e `ImagenDemasiadoGrande` como subclase para límites de bytes o píxeles. `LimiteCargaImagen` hereda de `FileUploadHandler`. En `receive_data_chunk` verificamos cada bloque antes de pasarlo al siguiente manejador. En `file_complete` dejamos que el otro manejador construya el archivo. `leer_imagen` convierte el archivo validado a RGB. |
+| [detector/inferencia/__init__.py](detector/inferencia/__init__.py) | Agrupamos el código que carga grafos y ejecuta predicciones. |
+| [detector/inferencia/onnx.py](detector/inferencia/onnx.py) | `cargar_metadatos` resuelve el JSON homónimo en UTF-8. `cargar_sesion` lee el grafo, comprueba la huella y crea una `InferenceSession` para CPU con los hilos indicados. |
+| [detector/inferencia/baches.py](detector/inferencia/baches.py) | `PredictorBaches.__init__` carga la ficha, la sesión y el nombre de entrada del grafo. `predecir` ejecuta las vistas con el umbral recibido. `letterbox` guarda el ajuste inicial, `augmented_view` crea cada vista, `combine_tta` unifica los candidatos y `decode` aplica confianza, NMS y retorno de coordenadas. |
+| [detector/inferencia/grietas.py](detector/inferencia/grietas.py) | `PredictorGrietas.__init__` carga el grafo y su ficha. En `predecir` construimos la entrada, ejecutamos la sesión y devolvemos la máscara booleana con la misma resolución que la imagen analizada. |
+| [detector/servicio.py](detector/servicio.py) | `cargar_modelos(directorio, hilos)` crea y conserva el par de predictores mediante `lru_cache`. `analizar_imagen` obtiene ese par bajo `candado_modelos`, calcula la cobertura y construye los campos de la API. |
+| [detector/resultados.py](detector/resultados.py) | `marcar_bache` dibuja en el lienzo una caja y su confianza en porcentaje entero. En `imagen_anotada` copiamos la imagen, pintamos grietas y baches y devolvemos el JPEG como URL de datos. Centralizamos los colores y la tipografía en constantes del módulo. |
+
+### Interfaz y eventos
+
+| Archivo | Qué implementamos |
+| --- | --- |
+| [inicio.html](detector/templates/detector/inicio.html) | Organizamos la marca, los controles de archivo y cámara, el visor, el resultado, la leyenda y la descarga. Usamos `hidden`, `aria-pressed`, `aria-live`, etiquetas de formulario y textos alternativos para exponer el estado. Los comentarios de plantilla se eliminan durante el renderizado. |
+| [interfaz.css](detector/static/detector/css/interfaz.css) | Definimos paleta, tipografía, foco visible, iconos, estados y reglas adaptables. La cuadrícula pasa a una columna a 850 px y ajustamos márgenes, rellenos y encabezado a 440 px. Usamos `object-fit: contain` para conservar la proporción visible de la imagen y el vídeo. |
+| [api.js](detector/static/detector/js/api.js) | `solicitarAnalisis` crea `FormData`, adjunta el token, envía el archivo y transforma los errores HTTP en mensajes de interfaz. `cargarEjemplo` recupera el JPEG estático como `Blob`. Ambos reciben una señal de cancelación. |
+| [camara.js](detector/static/detector/js/camara.js) | La clase `Camara` administra el `MediaStream`, el elemento `video` y un `canvas` reutilizable. El constructor recibe qué hacer si se desconecta la cámara. `iniciar` abre las pistas y espera la reproducción. `detener` cierra las pistas e invalida aperturas pendientes. `capturar` copia el fotograma y devuelve un JPEG como `Blob`. `mensajeCamara` traduce los fallos habituales de permisos, presencia y lectura de dispositivos. |
+| [interfaz.js](detector/static/detector/js/interfaz.js) | Mantenemos el estado de fuente, visor, solicitud y sesión de cámara. Asociamos los eventos de formulario, arrastre, clic y vídeo con el servicio, y liberamos la cámara cuando se abandona la página. |
+| [tramo-de-ejemplo.jpg](detector/static/detector/img/tramo-de-ejemplo.jpg) | Usamos una fotografía de Editor5807 distribuida en dominio público como fuente de prueba que se sirve con los estáticos. [Ficha de la fotografía](https://commons.wikimedia.org/wiki/File:Emerging_pot_hole.JPG) |
+
+Distribuimos las funciones de `interfaz.js` por tarea. Así podemos preparar la cámara y pedir el análisis sin duplicar el flujo para cada fuente.
+
+| Tarea | Funciones y estado |
+| --- | --- |
+| Acceso y avisos | `elemento` busca elementos por ID. `informar` actualiza el texto y el atributo que CSS usa para los errores. `porcentaje` formatea proporciones con hasta dos decimales en español de Colombia. |
+| Visor y acciones | `actualizarVisor` elige el original, el vídeo o la imagen anotada y muestra su resolución. `actualizarControles` cambia la disponibilidad y el texto de los botones según `modo`, `solicitud`, `inicioCamara` y `sesionEnVivo`. |
+| Archivos | `recibirArchivo` aplica el filtro inicial a la selección o al arrastre. `elegirImagen` cancela la operación anterior, libera la URL de objeto anterior y presenta el archivo o el ejemplo. |
+| Cámara | `cambiarModo` coordina la transición entre fuentes. `activarCamara` distingue cada petición de permiso con un símbolo. `apagarCamara` libera vídeo, solicitudes y resultados asociados. |
+| Análisis | `analizar` obtiene una imagen, crea un `AbortController`, envía el formulario y comprueba si la respuesta corresponde a la operación vigente. `analizarFotogramas` repite la captura tras una respuesta exitosa. `detenerAnalisis` cancela tanto el temporizador como la petición del navegador. |
+| Resultado | `mostrarResultado` coloca el JPEG, cuenta cajas, formatea la cobertura y construye la lista de confianza. `borrarResultado` quita esas referencias y restablece el visor. Mostramos «<0,01 %» cuando hay píxeles marcados y el redondeo a dos decimales ocultaría su presencia. |
+
+Usamos [.gitignore](.gitignore) para mantener fuera de Git el entorno virtual, el bytecode, los archivos estáticos recolectados y el archivo local `.env`. Conservamos los modelos ONNX y sus fichas como recursos de inferencia.
+
+## Contrato HTTP
+
+| Método y ruta | Respuesta |
+| --- | --- |
+| `GET /` y `HEAD /` | Página de inspección. Al representar el formulario, Django genera el token CSRF e informa al navegador de su cookie. |
+| `POST /api/analizar/` | Enviamos `multipart/form-data` con un único archivo en el campo `imagen`. En el cliente incluimos la cookie del mismo sitio y el encabezado `X-CSRFToken` que corresponde al formulario. |
+| `GET /static/detector/…` | Servimos la hoja de estilos, los módulos JavaScript y la foto de ejemplo. |
+
+Usamos CSRF (*Cross-Site Request Forgery*) para proteger el POST contra solicitudes iniciadas desde otros sitios. Django comprueba el token y la cookie y valida el origen que envía el navegador. Conservamos el POST desde la misma página y dejamos que el navegador genere la frontera del cuerpo multipart a partir de `FormData`. [Protección CSRF de Django](https://docs.djangoproject.com/en/5.2/ref/csrf/)
+
+### Respuesta de análisis
+
+Mostramos la estructura devuelta para la foto de ejemplo. Abreviamos el contenido codificado del JPEG y redondeamos las cifras de la muestra para facilitar su lectura.
+
+```json
+{
+  "imagen": "data:image/jpeg;base64,<contenido JPEG>",
+  "ancho": 960,
+  "alto": 720,
+  "baches": [
+    {
+      "class_id": 0,
+      "label": "Bache",
+      "confidence": 0.6792,
+      "box_xyxy": [68.98, 243.77, 946.58, 711.90]
+    }
+  ],
+  "grietas": {
+    "detectadas": true,
+    "cobertura": 1.6464
+  }
+}
+```
+
+| Campo | Interpretación |
+| --- | --- |
+| `imagen` | URL de datos con el JPEG final codificado en base64. |
+| `ancho`, `alto` | Dimensiones en píxeles del contenido que analizaron los modelos. |
+| `baches` | Lista que puede quedar vacía. Cada entrada contiene la clase 0, el nombre, la confianza como valor de 0 a 1 y dos esquinas en píxeles. El origen de coordenadas está en la esquina superior izquierda. |
+| `grietas.detectadas` | Booleano que indica si al menos un píxel alcanzó el umbral de segmentación. |
+| `grietas.cobertura` | Porcentaje de píxeles marcados, de 0 a 100. La interfaz aplica formato local y el valor de la API conserva su precisión numérica. |
+
+### Errores
+
+| Código | Tratamiento |
+| --- | --- |
+| `400 Bad Request` | Comunicamos la falta de archivo, el formulario multipart inválido o el formato de imagen inválido. |
+| `403 Forbidden` | Django bloquea la solicitud si falla la validación CSRF. Mostramos «Recarga la página para volver a iniciar el análisis». |
+| `405 Method Not Allowed` | El análisis acepta únicamente `POST`. Devolvemos `Allow: POST` cuando la vista recibe otro método. |
+| `413 Content Too Large` | Informamos un exceso del límite de archivo o de píxeles. Vercel puede emitir el suyo por el tamaño total del cuerpo. |
+| `503 Service Unavailable` | Informamos que falló el análisis y registramos en el servidor la causa con su traza. Revisamos los pesos, los metadatos y la ejecución del modelo en ese registro. |
+
+## Configuración y despliegue
+
+### Variables y valores del proyecto
+
+Leemos las variables del entorno del proceso. En local podemos definirlas desde la terminal. En Vercel las gestionamos desde **Settings → Environment Variables**.
+
+| Variable | Valor predeterminado y uso |
+| --- | --- |
+| `DJANGO_DEBUG` | `1` activa la depuración. Usamos `0` junto con una clave propia en un entorno público. |
+| `DJANGO_SECRET_KEY` | Clave de firma de Django. Es obligatoria en la configuración cuando desactivamos la depuración. |
+| `DJANGO_ALLOWED_HOSTS` | Lista de hosts separados por comas. Si falta, admitimos `localhost`, `127.0.0.1` y `[::1]`. |
+| `ROADVISION_MODELOS` | Carpeta que contiene ambos ONNX y ambos JSON. Usamos `modelos/` en la raíz del repositorio por defecto. |
+| `ROADVISION_HILOS` | Hilos internos por sesión de ONNX Runtime. Usamos `4` por defecto y aplicamos un mínimo de uno. |
+| `VERCEL` y `VERCEL_ENV` | Activamos los ajustes del proxy cuando Vercel indica que se trata de un despliegue. El entorno `development` conserva el comportamiento local. |
+| `VERCEL_URL`, `VERCEL_BRANCH_URL` y `VERCEL_PROJECT_PRODUCTION_URL` | Añadimos a los hosts permitidos los dominios de despliegue, de rama y de producción que Vercel pone a disposición. |
+
+En [settings.py](roadvision/settings.py) centralizamos además los siguientes valores.
+
+| Ajuste | Cómo lo usamos |
+| --- | --- |
+| `ROOT_URLCONF`, `WSGI_APPLICATION`, `INSTALLED_APPS` | Elegimos el router del proyecto, su aplicación WSGI y las aplicaciones Django registradas. |
+| `LANGUAGE_CODE` y `TIME_ZONE` | Configuramos `es-co` y `America/Bogota`. |
+| `MIDDLEWARE`, `CSRF_FAILURE_VIEW` y `TEMPLATES` | Instalamos el middleware de seguridad, CSRF y protección de encuadre. Enlazamos el error CSRF con JSON y buscamos plantillas dentro de las aplicaciones. |
+| `STATIC_URL` y `STATIC_ROOT` | Servimos los estáticos con el prefijo `/static/` y recolectamos sus archivos en `.static/`. |
+| `SECURE_PROXY_SSL_HEADER` y `CSRF_COOKIE_SECURE` | En Vercel usamos `X-Forwarded-Proto` para que Django identifique HTTPS y marcamos la cookie para que viaje por HTTPS. |
+| `UMBRAL_CONFIANZA_BACHES` y `UMBRAL_SEGMENTACION_GRIETAS` | Aplicamos `0.15` y `0.947` al ejecutar ambos predictores desde la web. |
+| `MAX_BYTES_IMAGEN`, `MAX_PIXELES_IMAGEN` y `MAX_LADO_ANALISIS` | Definimos 10 MiB de archivo, 24 millones de píxeles de origen y 1.600 píxeles como lado mayor de análisis. |
+| `DATA_UPLOAD_MAX_MEMORY_SIZE`, `DATA_UPLOAD_MAX_NUMBER_FILES` y `DATA_UPLOAD_MAX_NUMBER_FIELDS` | Limitamos a 256 KiB los datos sujetos al límite de memoria de Django, a uno los archivos y a ocho los campos multipart. |
+| `FILE_UPLOAD_MAX_MEMORY_SIZE` y `FILE_UPLOAD_HANDLERS` | Fijamos el umbral de memoria de Django en 10 MiB más 64 KiB. Encadenamos el límite personalizado, el manejador en memoria y el manejador de archivo temporal. |
+
+### Publicar en Vercel con ONNX en el repositorio
+
+1. Importamos el repositorio en Vercel con la raíz en el directorio que contiene `manage.py` y usamos el soporte nativo de Django. Mantenemos en el proyecto el directorio `modelos/` con los cuatro archivos que requiere la inferencia.
+2. En **Settings → Environment Variables**, habilitamos **Automatically expose System Environment Variables**. Configuramos `DJANGO_DEBUG=0` y `DJANGO_SECRET_KEY` para producción. Si usamos dominios adicionales a los que Vercel expone automáticamente, los añadimos a `DJANGO_ALLOWED_HOSTS` sin protocolo.
+3. Desplegamos la revisión. Vercel detecta el módulo WSGI y recoge los archivos estáticos. Django abre los ONNX cuando se ejecuta la primera solicitud de análisis en el proceso.
+4. Abrimos el dominio HTTPS y analizamos el ejemplo. Probamos luego una foto y el acceso a la cámara. Comprobamos en **Runtime Logs** los fallos que aparezcan.
+
+[Despliegue de Django en Vercel](https://vercel.com/docs/frameworks/full-stack/django) · [Variables de sistema de Vercel](https://vercel.com/docs/environment-variables/system-environment-variables)
+
+## Verificación y diagnóstico
+
+### Pruebas reproducibles
+
+| Comprobación | Procedimiento y resultado esperado |
+| --- | --- |
+| Arranque de Django | Ejecutamos `manage.py check` y confirmamos que el proyecto arranca y resuelve las rutas al abrir la portada. |
+| Archivos estáticos | Ejecutamos `manage.py findstatic detector/js/interfaz.js detector/img/tramo-de-ejemplo.jpg` para confirmar que Django encuentra los módulos y la foto. `manage.py collectstatic --noinput` prepara la carpeta de salida cuando queremos verificar la recolección en local. |
+| Inferencia con el ejemplo | Pulsamos **Analizar imagen** desde el estado inicial. En la configuración documentada, verificamos **1 bache** y cerca de **1,65 % de cobertura** con el JPEG del repositorio. |
+| Imagen inválida y tamaño | Probamos un archivo corrupto o un formato incompatible para comprobar la respuesta de validación. Probamos un archivo mayor al límite de Django para comprobar el mensaje de tamaño. |
+| Cámara y descarga | Abrimos la cámara, capturamos una imagen y esperamos que aparezca el resultado. Comprobamos las actualizaciones en vivo, la pausa, la liberación del dispositivo y que el JPEG descargado se abra correctamente. |
+| CSRF y HTTPS | Probamos una solicitud con token y origen válidos. Simulamos el proxy Vercel con `X-Forwarded-Proto: https` para comprobar que el mismo origen se acepta y que un origen diferente sigue rechazándose. |
+| Integridad | Al cargar las sesiones, verificamos el SHA-256 de cada ONNX frente a su ficha. Si la huella difiere, revisamos que el JSON y el modelo procedan de la misma exportación. |
+
+### Diagnóstico de fallos
+
+- **La portada abre pero el análisis devuelve 403.** Revisamos si el dominio aparece en las variables de Vercel o en `DJANGO_ALLOWED_HOSTS` y si el proxy indica HTTPS. Luego recargamos el formulario y comprobamos que la cookie CSRF y el encabezado lleguen en la misma solicitud.
+- **El análisis devuelve 503.** Revisamos la excepción registrada por `detector.views`. Confirmamos que `ROADVISION_MODELOS` apunta a la carpeta correcta, que los cuatro archivos tienen los nombres documentados y que los hashes coinciden.
+- **El servidor devuelve 413.** Distinguimos en los registros el límite de Django del límite de Vercel. Reintentamos con una imagen que quepa en el límite que se aplica a esa solicitud.
+- **La cámara no inicia.** Comprobamos el permiso de cámara, la disponibilidad del dispositivo y que el navegador abrió la página mediante HTTPS o `localhost`.
+- **El resultado está vacío o aparecen marcas inesperadas.** Revisamos las puntuaciones, la iluminación, la distancia y el encuadre. Contrastamos el resultado con una muestra anotada usando los mismos umbrales y la misma resolución para poder interpretar los cambios.

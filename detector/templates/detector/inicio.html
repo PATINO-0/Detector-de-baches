@@ -1,126 +1,126 @@
-{% load static l10n %}
-<!doctype html>
-<html lang="es-CO">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Analiza imágenes del pavimento para identificar baches y grietas.">
-    <meta name="theme-color" content="#f1f4f8">
-    <title>RoadVision AI · Análisis de pavimento</title>
-    <link rel="stylesheet" href="{% static 'detector/css/interfaz.css' %}">
-    <script type="module" src="{% static 'detector/js/interfaz.js' %}"></script>
-</head>
-<body>
-    <header class="cabecera">
-        <div class="contenedor cabecera-interior">
-            <a class="marca" href="{% url 'detector:inicio' %}" aria-label="RoadVision AI, inicio">
-                <span class="marca-icono" aria-hidden="true"><i></i></span>
-                <span>RoadVision <b>AI</b></span>
-            </a>
-        </div>
-    </header>
+{# Cargamos las etiquetas de estáticos y el filtro de conversión numérica sin localizar. #}{% load static l10n %}
+{# Declaramos HTML moderno para que el navegador use el modo estándar. #}<!doctype html>
+{# Identificamos el idioma como español de Colombia para el navegador y sus ayudas. #}<html lang="es-CO">
+{# Reunimos los metadatos y recursos necesarios antes de mostrar la interfaz. #}<head>
+    {# Declaramos UTF-8 para conservar los acentos y símbolos de la interfaz. #}<meta charset="utf-8">
+    {# Hacemos coincidir el ancho de la página con el ancho del dispositivo. #}<meta name="viewport" content="width=device-width, initial-scale=1">
+    {# Describimos el propósito del sitio en los metadatos de la página. #}<meta name="description" content="Analiza imágenes del pavimento para identificar baches y grietas.">
+    {# Damos al navegador el color que identifica visualmente la interfaz. #}<meta name="theme-color" content="#f1f4f8">
+    {# Identificamos el sitio y su tarea principal en la pestaña. #}<title>RoadVision AI · Análisis de pavimento</title>
+    {# Resolvemos la ruta pública de la hoja de estilos mediante Django. #}<link rel="stylesheet" href="{% static 'detector/css/interfaz.css' %}">
+    {# Cargamos la entrada de JavaScript como módulo para que pueda importar los demás. #}<script type="module" src="{% static 'detector/js/interfaz.js' %}"></script>
+{# Cerramos los metadatos antes del contenido visible. #}</head>
+{# Abrimos el contenido interactivo que verá el usuario. #}<body>
+    {# Identificamos la cabecera de navegación y marca. #}<header class="cabecera">
+        {# Centramos la marca en el mismo ancho máximo que usa el contenido principal. #}<div class="contenedor cabecera-interior">
+            {# Resolvemos la ruta de inicio y nombramos el enlace para tecnologías de asistencia. #}<a class="marca" href="{% url 'detector:inicio' %}" aria-label="RoadVision AI, inicio">
+                {# Dibujamos el icono mediante CSS y evitamos anunciar su decoración. #}<span class="marca-icono" aria-hidden="true"><i></i></span>
+                {# Presentamos el nombre de la aplicación y destacamos sus siglas visualmente. #}<span>RoadVision <b>AI</b></span>
+            {# Cerramos el enlace de vuelta a inicio. #}</a>
+        {# Terminamos el contenedor centrado de la marca. #}</div>
+    {# Cerramos la cabecera de navegación. #}</header>
 
-    <main class="contenedor principal">
-        <div class="introduccion">
-            <h1>Análisis de pavimento</h1>
-            <p>Detecta baches y grietas en una fotografía o con tu cámara web.</p>
-        </div>
+    {# Marcamos el contenido principal para navegación semántica por regiones. #}<main class="contenedor principal">
+        {# Agrupamos el título y la descripción inicial. #}<div class="introduccion">
+            {# Usamos un título principal que identifica la tarea de inspección. #}<h1>Análisis de pavimento</h1>
+            {# Explicamos las dos fuentes admitidas y las dos clases de daño. #}<p>Detecta baches y grietas en una fotografía o con tu cámara web.</p>
+        {# Cerramos la introducción para dar paso a las herramientas de trabajo. #}</div>
 
-        <noscript><p>Activa JavaScript en el navegador para utilizar el analizador.</p></noscript>
+        {# Mostramos una indicación cuando el navegador tiene JavaScript desactivado. #}<noscript><p>Activa JavaScript en el navegador para utilizar el analizador.</p></noscript>
 
-        <div class="espacio-trabajo">
-            {% static 'detector/img/tramo-de-ejemplo.jpg' as url_ejemplo %}
-            <section class="panel fuente" aria-labelledby="titulo-fuente">
-                <h2 id="titulo-fuente">Fuente de imagen</h2>
-                <div class="selector selector-fuente" role="group" aria-label="Fuente de imagen">
-                    <button id="modo-archivo" type="button" aria-pressed="true">
-                        <span class="icono-archivo" aria-hidden="true"></span> Archivo
-                    </button>
-                    <button id="modo-camara" type="button" aria-pressed="false">
-                        <span class="icono-camara" aria-hidden="true"></span> Cámara web
-                    </button>
-                </div>
+        {# Montamos la cuadrícula que contiene fuente, visor y resultados. #}<div class="espacio-trabajo">
+            {# Resolvemos una sola vez la URL estática del ejemplo y la reutilizamos. #}{% static 'detector/img/tramo-de-ejemplo.jpg' as url_ejemplo %}
+            {# Identificamos el panel de entrada con el encabezado que le da nombre. #}<section class="panel fuente" aria-labelledby="titulo-fuente">
+                {# Damos nombre y referencia accesible al panel de fuente. #}<h2 id="titulo-fuente">Fuente de imagen</h2>
+                {# Agrupamos los botones de fuentes en un selector accesible. #}<div class="selector selector-fuente" role="group" aria-label="Fuente de imagen">
+                    {# Elegimos Archivo como fuente inicial y reflejamos su estado pulsado. #}<button id="modo-archivo" type="button" aria-pressed="true">
+                        {# Acompañamos el texto Archivo con un icono que queda fuera de la lectura accesible. #}<span class="icono-archivo" aria-hidden="true"></span> Archivo
+                    {# Cerramos el control de selección de archivo. #}</button>
+                    {# Ofrecemos la fuente Cámara web inicialmente sin seleccionar. #}<button id="modo-camara" type="button" aria-pressed="false">
+                        {# Acompañamos el texto de cámara con su representación decorativa. #}<span class="icono-camara" aria-hidden="true"></span> Cámara web
+                    {# Cerramos el control de selección de cámara. #}</button>
+                {# Terminamos el grupo de selección de fuentes. #}</div>
 
-                <form id="formulario" action="{% url 'detector:analizar' %}" method="post" enctype="multipart/form-data"
-                      data-ejemplo="{{ url_ejemplo }}" data-max-bytes="{{ max_bytes_imagen|unlocalize }}">
-                    {% csrf_token %}
-                    <div id="controles-archivo">
-                        <label class="zona-archivo" id="zona-archivo" for="archivo">
-                            <input id="archivo" name="imagen" type="file" accept="image/jpeg,image/png,image/webp"
-                                   aria-describedby="formatos-archivo">
-                            <span class="icono-carga" aria-hidden="true"><i></i></span>
-                            <strong>Seleccionar imagen</strong>
-                            <span>o arrástrala aquí</span>
-                        </label>
-                        <p id="formatos-archivo" class="ayuda-archivo">JPG, PNG o WebP · hasta 10 MB</p>
-                        <button id="analizar-archivo" class="boton primario" type="submit">Analizar imagen</button>
-                        <button id="usar-ejemplo" class="boton texto" type="button" hidden>Usar imagen de ejemplo</button>
-                    </div>
+                {# Apuntamos al endpoint de análisis y declaramos un formulario POST multipart. #}<form id="formulario" action="{% url 'detector:analizar' %}" method="post" enctype="multipart/form-data"
+                      {# Pasamos al módulo la URL del ejemplo y un límite en bytes sin formato regional. #}data-ejemplo="{{ url_ejemplo }}" data-max-bytes="{{ max_bytes_imagen|unlocalize }}">
+                    {# Insertamos el token que permite comprobar el POST en el mismo sitio. #}{% csrf_token %}
+                    {# Agrupamos las acciones que solo corresponden a imágenes de archivo. #}<div id="controles-archivo">
+                        {# Asociamos la zona clicable con el selector nativo y permitimos soltar archivos en ella. #}<label class="zona-archivo" id="zona-archivo" for="archivo">
+                            {# Usamos el campo imagen y sugerimos al explorador los tipos de archivo admitidos. #}<input id="archivo" name="imagen" type="file" accept="image/jpeg,image/png,image/webp"
+                                   {# Asociamos al campo la ayuda de formatos y tamaño para quien use lector de pantalla. #}aria-describedby="formatos-archivo">
+                            {# Dibujamos un icono de subida que acompaña el texto sin duplicar su significado. #}<span class="icono-carga" aria-hidden="true"><i></i></span>
+                            {# Identificamos claramente la acción que abre el navegador de archivos. #}<strong>Seleccionar imagen</strong>
+                            {# Indicamos que el área también admite arrastrar una imagen. #}<span>o arrástrala aquí</span>
+                        {# Cerramos la etiqueta que amplía el área activa del campo de archivo. #}</label>
+                        {# Mostramos los formatos admitidos y el máximo de la aplicación. #}<p id="formatos-archivo" class="ayuda-archivo">JPG, PNG o WebP · hasta 10 MB</p>
+                        {# Enviamos el archivo o el ejemplo mediante el botón de envío del formulario. #}<button id="analizar-archivo" class="boton primario" type="submit">Analizar imagen</button>
+                        {# Ofrecemos volver al ejemplo cuando el módulo activa esta opción. #}<button id="usar-ejemplo" class="boton texto" type="button" hidden>Usar imagen de ejemplo</button>
+                    {# Cerramos los controles de archivo antes de montar los de cámara. #}</div>
 
-                    <div id="controles-camara" class="controles-camara" hidden>
-                        <p id="ayuda-camara">Activa la cámara y apunta hacia el pavimento.</p>
-                        <button id="activar-camara" class="boton primario" type="button">Activar cámara</button>
-                        <button id="analizar-en-vivo" class="boton primario" type="button" hidden>Analizar en vivo</button>
-                        <button id="capturar-fotograma" class="boton secundario" type="button" hidden>Analizar un fotograma</button>
-                        <button id="cerrar-camara" class="boton texto" type="button" hidden>Apagar cámara</button>
-                    </div>
-                </form>
-                <p id="estado" class="estado" role="status" aria-live="polite"></p>
-            </section>
+                    {# Reservamos los controles de cámara, ocultos mientras usamos el modo archivo. #}<div id="controles-camara" class="controles-camara" hidden>
+                        {# Explicamos cómo preparar la cámara antes de iniciar un análisis. #}<p id="ayuda-camara">Activa la cámara y apunta hacia el pavimento.</p>
+                        {# Solicitamos acceso al dispositivo a partir de una acción explícita del usuario. #}<button id="activar-camara" class="boton primario" type="button">Activar cámara</button>
+                        {# Ofrecemos el análisis periódico cuando la cámara ya dispone de un flujo. #}<button id="analizar-en-vivo" class="boton primario" type="button" hidden>Analizar en vivo</button>
+                        {# Ofrecemos la captura puntual cuando hay un dispositivo activado. #}<button id="capturar-fotograma" class="boton secundario" type="button" hidden>Analizar un fotograma</button>
+                        {# Permitimos cerrar las pistas de vídeo y cancelar el análisis asociado. #}<button id="cerrar-camara" class="boton texto" type="button" hidden>Apagar cámara</button>
+                    {# Cerramos los controles que dependen de la cámara. #}</div>
+                {# Terminamos el formulario y dejamos fuera la región de estado. #}</form>
+                {# Anunciamos el progreso y los avisos de forma no interrumpida. #}<p id="estado" class="estado" role="status" aria-live="polite"></p>
+            {# Cerramos el panel de entrada al espacio de inspección. #}</section>
 
-            <section class="panel visor" aria-labelledby="titulo-visor">
-                <div class="visor-cabecera">
-                    <div>
-                        <h2 id="titulo-visor">Vista de inspección</h2>
-                        <p id="nombre-fuente" class="nombre-fuente">Imagen de ejemplo</p>
-                    </div>
-                    <div class="selector selector-visor" role="group" aria-label="Vista de inspección">
-                        <button id="ver-original" type="button" aria-pressed="true">Original</button>
-                        <button id="ver-resultado" type="button" aria-pressed="false" disabled>Detecciones</button>
-                    </div>
-                </div>
-                <div class="visor-lienzo">
-                    <img id="imagen-original" src="{{ url_ejemplo }}" alt="Imagen original del pavimento">
-                    <video id="video" aria-label="Vista previa en directo" playsinline muted hidden></video>
-                    <div id="camara-sin-video" class="camara-sin-video" hidden>
-                        <span class="icono-camara" aria-hidden="true"></span>
-                        <p>Activa la cámara para ver el pavimento aquí.</p>
-                    </div>
-                    <img id="imagen-resultado" alt="Pavimento con cajas de baches y máscara de grietas" hidden>
-                </div>
-                <div class="visor-pie">
-                    <ul class="leyenda" aria-label="Leyenda de detecciones">
-                        <li><span class="muestra-bache" aria-hidden="true"></span> Baches</li>
-                        <li><span class="muestra-grieta" aria-hidden="true"></span> Grietas</li>
-                    </ul>
-                    <span id="resolucion" class="resolucion"></span>
-                </div>
-            </section>
+            {# Asociamos el visor con su encabezado para una navegación accesible. #}<section class="panel visor" aria-labelledby="titulo-visor">
+                {# Agrupamos el título de la escena y los controles de comparación. #}<div class="visor-cabecera">
+                    {# Reunimos la descripción textual del área de inspección. #}<div>
+                        {# Damos nombre accesible al panel que muestra la foto o la cámara. #}<h2 id="titulo-visor">Vista de inspección</h2>
+                        {# Identificamos la fuente activa y comenzamos con el archivo de ejemplo. #}<p id="nombre-fuente" class="nombre-fuente">Imagen de ejemplo</p>
+                    {# Cerramos el grupo de descripción del visor. #}</div>
+                    {# Agrupamos las dos vistas de una misma escena. #}<div class="selector selector-visor" role="group" aria-label="Vista de inspección">
+                        {# Marcamos el contenido original como la vista activa inicial. #}<button id="ver-original" type="button" aria-pressed="true">Original</button>
+                        {# Reservamos la vista de detecciones hasta que Django devuelva un análisis. #}<button id="ver-resultado" type="button" aria-pressed="false" disabled>Detecciones</button>
+                    {# Terminamos el selector de vistas. #}</div>
+                {# Cerramos el encabezado del visor. #}</div>
+                {# Reservamos el espacio donde se superponen foto, vídeo y anotación. #}<div class="visor-lienzo">
+                    {# Cargamos la imagen de ejemplo y describimos su contenido alternativo. #}<img id="imagen-original" src="{{ url_ejemplo }}" alt="Imagen original del pavimento">
+                    {# Permitimos reproducción inline, sin audio y oculta hasta activar la cámara. #}<video id="video" aria-label="Vista previa en directo" playsinline muted hidden></video>
+                    {# Reservamos el aviso que usamos cuando aún no hay vídeo disponible. #}<div id="camara-sin-video" class="camara-sin-video" hidden>
+                        {# Reutilizamos el icono de cámara como elemento decorativo del aviso. #}<span class="icono-camara" aria-hidden="true"></span>
+                        {# Indicamos qué acción puede hacer aparecer una escena de la cámara. #}<p>Activa la cámara para ver el pavimento aquí.</p>
+                    {# Cerramos el bloque de estado del vídeo. #}</div>
+                    {# Reservamos la imagen anotada con una descripción accesible y sin mostrarla aún. #}<img id="imagen-resultado" alt="Pavimento con cajas de baches y máscara de grietas" hidden>
+                {# Cerramos el lienzo que contiene las diferentes fuentes visuales. #}</div>
+                {# Agrupamos la leyenda y el tamaño de la imagen en la parte inferior del visor. #}<div class="visor-pie">
+                    {# Usamos una lista accesible para explicar la marca de cada clase. #}<ul class="leyenda" aria-label="Leyenda de detecciones">
+                        {# Asociamos la muestra ámbar con las cajas de baches. #}<li><span class="muestra-bache" aria-hidden="true"></span> Baches</li>
+                        {# Asociamos la muestra magenta con la máscara de grietas. #}<li><span class="muestra-grieta" aria-hidden="true"></span> Grietas</li>
+                    {# Cerramos la lista de referencias de color. #}</ul>
+                    {# Reservamos el lugar donde JavaScript muestra la resolución visible. #}<span id="resolucion" class="resolucion"></span>
+                {# Terminamos el pie del visor. #}</div>
+            {# Cerramos el panel de comparación visual. #}</section>
 
-            <section class="panel resultados" aria-labelledby="titulo-resultados">
-                <h2 id="titulo-resultados">Resultados</h2>
-                <dl class="metricas">
-                    <div class="metrica metrica-baches">
-                        <dt>Baches detectados</dt>
-                        <dd id="cantidad-baches">—</dd>
-                    </div>
-                    <div class="metrica metrica-grietas">
-                        <dt>Área con grietas</dt>
-                        <dd id="cobertura-grietas">—</dd>
-                    </div>
-                </dl>
-                <p id="resumen-resultado" class="resumen-resultado">Analiza una imagen para ver las detecciones.</p>
-                <details id="detalle-baches" hidden>
-                    <summary>Confianza por detección de bache</summary>
-                    <ol id="lista-baches"></ol>
-                </details>
-                <a id="descargar-resultado" class="boton secundario" download="roadvision-detecciones.jpg" hidden>
-                    Descargar imagen anotada
-                </a>
-            </section>
-        </div>
+            {# Creamos el panel que reúne datos y descarga de la imagen anotada. #}<section class="panel resultados" aria-labelledby="titulo-resultados">
+                {# Damos un encabezado accesible al panel. #}<h2 id="titulo-resultados">Resultados</h2>
+                {# Organizamos las métricas por pares de nombre y valor. #}<dl class="metricas">
+                    {# Agrupamos la tarjeta del número de baches. #}<div class="metrica metrica-baches">
+                        {# Etiquetamos el valor que representa el conteo de cajas. #}<dt>Baches detectados</dt>
+                        {# Indicamos que todavía no hay una respuesta de conteo. #}<dd id="cantidad-baches">—</dd>
+                    {# Cerramos el grupo de la primera métrica. #}</div>
+                    {# Agrupamos la tarjeta que describe la cobertura de grietas. #}<div class="metrica metrica-grietas">
+                        {# Etiquetamos el valor que representa la proporción de área en píxeles. #}<dt>Área con grietas</dt>
+                        {# Dejamos pendiente el valor hasta que termine un análisis. #}<dd id="cobertura-grietas">—</dd>
+                    {# Cerramos el grupo de la segunda métrica. #}</div>
+                {# Terminamos la lista de métricas. #}</dl>
+                {# Indicamos lo que debe ocurrir antes de mostrar un resumen. #}<p id="resumen-resultado" class="resumen-resultado">Analiza una imagen para ver las detecciones.</p>
+                {# Reservamos un desplegable que aparece si el modelo devuelve baches. #}<details id="detalle-baches" hidden>
+                    {# Damos nombre a la acción que revela las puntuaciones individuales. #}<summary>Confianza por detección de bache</summary>
+                    {# Reservamos una lista en la que se insertará la confianza de cada caja. #}<ol id="lista-baches"></ol>
+                {# Cerramos el contenido desplegable antes del enlace de descarga. #}</details>
+                {# Elegimos un nombre para el JPEG y ocultamos el enlace hasta recibirlo. #}<a id="descargar-resultado" class="boton secundario" download="roadvision-detecciones.jpg" hidden>
+                    {# Damos al enlace el texto de acción que se muestra al usuario. #}Descargar imagen anotada
+                {# Cerramos la acción de descarga del resultado. #}</a>
+            {# Terminamos el panel de métricas, detalles y descarga. #}</section>
+        {# Cerramos la cuadrícula que reúne los paneles. #}</div>
 
-        <footer class="pie">Las imágenes se procesan para el análisis, sin guardar un historial.</footer>
-    </main>
-</body>
-</html>
+        {# Informamos del uso de las imágenes y de la ausencia de un historial de análisis. #}<footer class="pie">Las imágenes se procesan para el análisis, sin guardar un historial.</footer>
+    {# Cerramos la región principal de la aplicación. #}</main>
+{# Terminamos el contenido visible y de uso interactivo. #}</body>
+{# Cerramos el documento HTML. #}</html>
