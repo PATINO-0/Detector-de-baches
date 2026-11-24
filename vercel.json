@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "django",
+  "functions": {
+    "roadvision/wsgi.py": {
+      "maxDuration": 60,
+      "includeFiles": "modelos/*.json",
+      "excludeFiles": "{modelos/*.onnx,supabase/**}"
+    }
+  }
+}

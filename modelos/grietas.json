@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "task": "binary_semantic_segmentation",
+  "labels": [
+    "Grieta"
+  ],
+  "architecture": "CrackUNet",
+  "width": 16,
+  "best_epoch": 20,
+  "image_size": 384,
+  "threshold": 0.85,
+  "input": {
+    "onnx_layout": "NCHW",
+    "keras_layout": "NHWC",
+    "dtype": "float32",
+    "color": "RGB",
+    "scale": 0.00392156862745098,
+    "letterbox_pad": 114
+  },
+  "output": "probabilidad de grieta por píxel; retirar relleno y recuperar tamaño original",
+  "metrics_protocol": "píxeles válidos a resolución de entrada; agregación global; IoU y Dice de grieta",
+  "dataset": {
+    "url": "https://github.com/ultralytics/assets/releases/download/v0.0.0/crack-seg.zip",
+    "sha256": "814b566d61e890024d15f22a3e6b14e252f781ab83f60a8d59e6684817efecdc",
+    "images": {
+      "test": 111,
+      "val": 200,
+      "train": 3717
+    },
+    "includes_road_and_wall_cracks": true,
+    "excluded_duplicates": 1
+  },
+  "validation": {
+    "threshold": 0.85,
+    "precision": 0.7369674759505268,
+    "recall": 0.7687076882839927,
+    "F1_Dice": 0.7525030341673088,
+    "IoU": 0.6032103121509566,
+    "tp_pixels": 458508,
+    "fp_pixels": 163647,
+    "fn_pixels": 137958,
+    "tn_pixels": 28731087
+  },
+  "test": {
+    "threshold": 0.85,
+    "precision": 0.7157983420842798,
+    "recall": 0.7367335499115828,
+    "F1_Dice": 0.7261150773907815,
+    "IoU": 0.5700005271304456,
+    "tp_pixels": 237892,
+    "fp_pixels": 94453,
+    "fn_pixels": 85009,
+    "tn_pixels": 15950262
+  },
+  "verification": {
+    "real_images": 4,
+    "onnx_max_absolute_error": 1.9669532775878906e-06,
+    "keras_max_absolute_error": 2.3245811462402344e-06
+  },
+  "onnx_sha256": "efe907a252f9190e05c491dd9d5bb2b1a5c28190ff1dce14ea928821d0ea37b3"
+}

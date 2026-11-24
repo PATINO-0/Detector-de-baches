@@ -1,0 +1,8 @@
+/.venv/
+/.static/
+__pycache__/
+*.py[cod]
+/.env
+/.env.*
+!/.env.example
+/.vercel/

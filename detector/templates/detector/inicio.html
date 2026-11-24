@@ -1,0 +1,127 @@
+{% load static l10n %}
+<!doctype html>
+<html lang="es-CO">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Analiza imágenes del pavimento para identificar baches y grietas.">
+    <meta name="theme-color" content="#f1f4f8">
+    <title>RoadVision AI · Análisis de pavimento</title>
+    <link rel="stylesheet" href="{% static 'detector/css/interfaz.css' %}">
+    <script type="module" src="{% static 'detector/js/interfaz.js' %}"></script>
+</head>
+<body>
+    <header class="cabecera">
+        <div class="contenedor cabecera-interior">
+            <a class="marca" href="{% url 'detector:inicio' %}" aria-label="RoadVision AI, inicio">
+                <span class="marca-icono" aria-hidden="true"><i></i></span>
+                <span>RoadVision <b>AI</b></span>
+            </a>
+        </div>
+    </header>
+
+    <main class="contenedor principal">
+        <div class="introduccion">
+            <h1>Análisis de pavimento</h1>
+            <p>Detecta baches y grietas en una fotografía o con tu cámara web.</p>
+        </div>
+
+        <noscript><p>Activa JavaScript en el navegador para utilizar el analizador.</p></noscript>
+
+        <div class="espacio-trabajo">
+            {% static 'detector/img/tramo-de-ejemplo.jpg' as url_ejemplo %}
+            <section class="panel fuente" aria-labelledby="titulo-fuente">
+                <h2 id="titulo-fuente">Fuente de imagen</h2>
+                <div class="selector selector-fuente" role="group" aria-label="Fuente de imagen">
+                    <button id="modo-archivo" type="button" aria-pressed="true">
+                        <span class="icono-archivo" aria-hidden="true"></span> Archivo
+                    </button>
+                    <button id="modo-camara" type="button" aria-pressed="false">
+                        <span class="icono-camara" aria-hidden="true"></span> Cámara web
+                    </button>
+                </div>
+
+                <form id="formulario" action="{% url 'detector:analizar' %}" method="post" enctype="multipart/form-data"
+                      data-ejemplo="{{ url_ejemplo }}" data-max-bytes="{{ max_bytes_imagen|unlocalize }}"
+                      data-max-mb="{{ max_mb_imagen|unlocalize }}">
+                    {% csrf_token %}
+                    <div id="controles-archivo">
+                        <label class="zona-archivo" id="zona-archivo" for="archivo">
+                            <input id="archivo" name="imagen" type="file" accept="image/jpeg,image/png,image/webp"
+                                   aria-describedby="formatos-archivo">
+                            <span class="icono-carga" aria-hidden="true"><i></i></span>
+                            <strong>Seleccionar imagen</strong>
+                            <span>o arrástrala aquí</span>
+                        </label>
+                        <p id="formatos-archivo" class="ayuda-archivo">JPG, PNG o WebP · hasta {{ max_mb_imagen }} MB</p>
+                        <button id="analizar-archivo" class="boton primario" type="submit">Analizar imagen</button>
+                        <button id="usar-ejemplo" class="boton texto" type="button" hidden>Usar imagen de ejemplo</button>
+                    </div>
+
+                    <div id="controles-camara" class="controles-camara" hidden>
+                        <p id="ayuda-camara">Activa la cámara y apunta hacia el pavimento.</p>
+                        <button id="activar-camara" class="boton primario" type="button">Activar cámara</button>
+                        <button id="analizar-en-vivo" class="boton primario" type="button" hidden>Analizar en vivo</button>
+                        <button id="capturar-fotograma" class="boton secundario" type="button" hidden>Analizar un fotograma</button>
+                        <button id="cerrar-camara" class="boton texto" type="button" hidden>Apagar cámara</button>
+                    </div>
+                </form>
+                <p id="estado" class="estado" role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="panel visor" aria-labelledby="titulo-visor">
+                <div class="visor-cabecera">
+                    <div>
+                        <h2 id="titulo-visor">Vista de inspección</h2>
+                        <p id="nombre-fuente" class="nombre-fuente">Imagen de ejemplo</p>
+                    </div>
+                    <div class="selector selector-visor" role="group" aria-label="Vista de inspección">
+                        <button id="ver-original" type="button" aria-pressed="true">Original</button>
+                        <button id="ver-resultado" type="button" aria-pressed="false" disabled>Detecciones</button>
+                    </div>
+                </div>
+                <div class="visor-lienzo">
+                    <img id="imagen-original" src="{{ url_ejemplo }}" alt="Imagen original del pavimento">
+                    <video id="video" aria-label="Vista previa en directo" playsinline muted hidden></video>
+                    <div id="camara-sin-video" class="camara-sin-video" hidden>
+                        <span class="icono-camara" aria-hidden="true"></span>
+                        <p>Activa la cámara para ver el pavimento aquí.</p>
+                    </div>
+                    <img id="imagen-resultado" alt="Pavimento con cajas de baches y máscara de grietas" hidden>
+                </div>
+                <div class="visor-pie">
+                    <ul class="leyenda" aria-label="Leyenda de detecciones">
+                        <li><span class="muestra-bache" aria-hidden="true"></span> Baches</li>
+                        <li><span class="muestra-grieta" aria-hidden="true"></span> Grietas</li>
+                    </ul>
+                    <span id="resolucion" class="resolucion"></span>
+                </div>
+            </section>
+
+            <section class="panel resultados" aria-labelledby="titulo-resultados">
+                <h2 id="titulo-resultados">Resultados</h2>
+                <dl class="metricas">
+                    <div class="metrica metrica-baches">
+                        <dt>Baches detectados</dt>
+                        <dd id="cantidad-baches">—</dd>
+                    </div>
+                    <div class="metrica metrica-grietas">
+                        <dt>Área con grietas</dt>
+                        <dd id="cobertura-grietas">—</dd>
+                    </div>
+                </dl>
+                <p id="resumen-resultado" class="resumen-resultado">Analiza una imagen para ver las detecciones.</p>
+                <details id="detalle-baches" hidden>
+                    <summary>Confianza por detección de bache</summary>
+                    <ol id="lista-baches"></ol>
+                </details>
+                <a id="descargar-resultado" class="boton secundario" download="roadvision-detecciones.jpg" hidden>
+                    Descargar imagen anotada
+                </a>
+            </section>
+        </div>
+
+        <footer class="pie">Las imágenes se procesan para el análisis, sin guardar un historial.</footer>
+    </main>
+</body>
+</html>

@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "model": "RoadVisionAI V6 Continuacion YOLOv8n",
+  "selected_epoch": 10,
+  "labels": [
+    "Bache"
+  ],
+  "source_names": {
+    "0": "Bache"
+  },
+  "image_size": 768,
+  "confidence": 0.4862895607948303,
+  "nms_iou": 0.6,
+  "max_det": 300,
+  "input": {
+    "onnx_pt_layout": "NCHW",
+    "keras_layout": "NHWC",
+    "dtype": "float32",
+    "color": "RGB",
+    "normalization": "dividir por 255",
+    "letterbox_pad": 114,
+    "spatial_dimensions": "múltiplos de 32",
+    "dynamic_batch": true
+  },
+  "output": {
+    "layout": "N,5,candidatos",
+    "channels": [
+      "cx",
+      "cy",
+      "width",
+      "height",
+      "confidence"
+    ],
+    "coordinates": "píxeles de la entrada con relleno"
+  },
+  "tta": {
+    "enabled_by_default": true,
+    "scales": [
+      1.0,
+      0.83,
+      0.67
+    ],
+    "horizontal_flip": [
+      false,
+      true,
+      false
+    ],
+    "stride": 32,
+    "view_padding_normalized": 0.447,
+    "augmented_tail_clipping": true
+  },
+  "historical_test_metrics": {
+    "images": 1293,
+    "targets": 3314,
+    "precision": 0.7922407541696882,
+    "recall": 0.6593240796620399,
+    "F1": 0.7196969696969697,
+    "mAP50": 0.7312249126583441,
+    "mAP50_95": 0.42714331819088436,
+    "requires_tta": true
+  },
+  "verification_protocol": "equivalencia FP32 sobre muestras de validación; métricas históricas del informe original",
+  "source_checkpoint_sha256": "e429c39a4e4906e44e0f80417236f028d87e05b7eae0f317fa0408f146d32374",
+  "sha256": {
+    "baches.pt": "e429c39a4e4906e44e0f80417236f028d87e05b7eae0f317fa0408f146d32374",
+    "baches.keras": "3e9e7fe05c3b4149ec28116cd5bb38bc6fef3e4b9286f89ea4632cb6ca164426",
+    "baches.onnx": "3d16d882c6a220b3f8961de34c58a05fd42e7bb4e6268d0fca0e7600de0e7967"
+  }
+}
