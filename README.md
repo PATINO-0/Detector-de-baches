@@ -21,6 +21,12 @@ Abre [RoadVision AI en localhost](http://localhost:8000/).
 
 El análisis se realiza en CPU y las solicitudes se procesan sin guardar un historial. La primera ejecución carga ambas sesiones ONNX. Django reutiliza las sesiones durante el resto del proceso.
 
+## Ejecutar en Vercel
+
+Vercel puede ejecutar Django con los archivos ONNX de `modelos/` incluidos en el proyecto. El análisis lee esos archivos directamente y funciona sin base de datos. [Django en Vercel](https://vercel.com/docs/frameworks/full-stack/django)
+
+En **Settings → Environment Variables**, habilita **Automatically expose System Environment Variables** para que Django reconozca los dominios de producción y vista previa y el HTTPS del proxy. Agrega los dominios personalizados adicionales a `DJANGO_ALLOWED_HOSTS`, separados por comas y sin `https://`. Vuelve a desplegar después de cambiar las variables. [Variables de Vercel](https://vercel.com/docs/environment-variables/system-environment-variables)
+
 ## Modelos incluidos
 
 | Archivo | Modelo y configuración |

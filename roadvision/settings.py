@@ -14,7 +14,19 @@ if not SECRET_KEY:
         raise ImproperlyConfigured("Define DJANGO_SECRET_KEY fuera del modo de desarrollo.")
     SECRET_KEY = "django-insecure-roadvision-clave-exclusiva-de-desarrollo-local"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",")
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",")
+    if host.strip()
+]
+if os.getenv("VERCEL") == "1" and os.getenv("VERCEL_ENV") != "development":
+    # Vercel termina HTTPS antes de reenviar la solicitud a Django.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    CSRF_COOKIE_SECURE = True
+    for variable in ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
+        if dominio := os.getenv(variable):
+            ALLOWED_HOSTS.append(dominio)
+
 ROOT_URLCONF = "roadvision.urls"
 WSGI_APPLICATION = "roadvision.wsgi.application"
 LANGUAGE_CODE = "es-co"
