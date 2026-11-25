@@ -8,6 +8,7 @@
     {# Damos al navegador el color que identifica visualmente la interfaz. #}<meta name="theme-color" content="#f1f4f8">
     {# Identificamos el sitio y su tarea principal en la pestaña. #}<title>RoadVision AI · Análisis de pavimento</title>
     {# Resolvemos la ruta pública de la hoja de estilos mediante Django. #}<link rel="stylesheet" href="{% static 'detector/css/interfaz.css' %}">
+    {# Cargamos los estilos del asistente como un recurso independiente. #}<link rel="stylesheet" href="{% static 'detector/css/asistente.css' %}">
     {# Cargamos la entrada de JavaScript como módulo para que pueda importar los demás. #}<script type="module" src="{% static 'detector/js/interfaz.js' %}"></script>
 {# Cerramos los metadatos antes del contenido visible. #}</head>
 {# Abrimos el contenido interactivo que verá el usuario. #}<body>
@@ -17,6 +18,7 @@
                 {# Dibujamos el icono mediante CSS y evitamos anunciar su decoración. #}<span class="marca-icono" aria-hidden="true"><i></i></span>
                 {# Presentamos el nombre de la aplicación y destacamos sus siglas visualmente. #}<span>RoadVision <b>AI</b></span>
             {# Cerramos el enlace de vuelta a inicio. #}</a>
+            {# Enlazamos la conversación desde la cabecera para encontrarla sin buscarla en la página. #}<a class="asistente-acceso" href="#asistente">Asistente</a>
         {# Terminamos el contenedor centrado de la marca. #}</div>
     {# Cerramos la cabecera de navegación. #}</header>
 
@@ -119,6 +121,8 @@
                 {# Cerramos la acción de descarga del resultado. #}</a>
             {# Terminamos el panel de métricas, detalles y descarga. #}</section>
         {# Cerramos la cuadrícula que reúne los paneles. #}</div>
+
+        {# Incluimos un formulario independiente para consultar el último análisis. #}{% include 'detector/asistente.html' %}
 
         {# Informamos del uso de las imágenes y de la ausencia de un historial de análisis. #}<footer class="pie">Las imágenes se procesan para el análisis, sin guardar un historial.</footer>
     {# Cerramos la región principal de la aplicación. #}</main>

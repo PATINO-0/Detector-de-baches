@@ -15,4 +15,6 @@ urlpatterns = [
     path("", views.inicio, name="inicio"),
     # Vinculamos la API al análisis y nombramos la ruta para resolverla en el formulario.
     path("api/analizar/", views.analizar, name="analizar"),
+    # Exponemos las consultas al Transformer en una ruta separada de la inferencia de imágenes.
+    path("api/asistente/", views.consultar_asistente, name="asistente"),
 ]

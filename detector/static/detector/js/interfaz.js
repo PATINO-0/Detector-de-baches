@@ -2,6 +2,8 @@
 
 // Importamos la descarga del ejemplo y el envío a la API.
 import { cargarEjemplo, solicitarAnalisis } from "./api.js";
+// Informamos al diálogo cuando cambia la inspección que puede consultar.
+import { actualizarContextoAsistente } from "./asistente.js";
 // Importamos la clase que controla el dispositivo de vídeo.
 import { Camara } from "./camara.js";
 
@@ -144,6 +146,8 @@ function actualizarControles() {
 function borrarResultado() {
     // Quitamos la última respuesta de la memoria de la interfaz.
     resultado = null;
+    // Desvinculamos el contexto de la foto o cámara anterior al seleccionar una fuente nueva.
+    actualizarContextoAsistente();
     // Volvemos al contenido original mientras esperamos otro análisis.
     vista = "original";
     // Retiramos la referencia del elemento de imagen anotada.
@@ -172,6 +176,8 @@ function borrarResultado() {
 function mostrarResultado(datos, cambiarVista) {
     // Conservamos el resultado para futuras comparaciones y actualizaciones del visor.
     resultado = datos;
+    // Asociamos el resumen firmado con la fuente que produjo este resultado.
+    actualizarContextoAsistente(datos.contexto_asistente, elemento("nombre-fuente").textContent);
     // Seleccionamos detecciones cuando el modo de análisis así lo solicita.
     if (cambiarVista) vista = "resultado";
     // Asignamos al visor el JPEG codificado que devolvió Django.

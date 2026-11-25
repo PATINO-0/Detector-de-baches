@@ -1,0 +1,63 @@
+/* Heredamos los colores y la tipografía de la interfaz de inspección. */
+
+/* Separamos el acceso al asistente de la marca en la cabecera. */
+.asistente-acceso { margin-inline-start: auto; color: var(--azul-oscuro); font-weight: 650; text-decoration: none; }
+/* Señalamos que el enlace permite desplazarse al panel de conversación. */
+.asistente-acceso:hover { text-decoration: underline; }
+
+/* Distribuimos contexto y preguntas rápidas junto a la conversación. */
+.asistente { margin-top: 22px; padding: 20px; display: grid; grid-template-columns: minmax(0, 270px) minmax(0, 1fr); gap: 24px; }
+/* Dejamos espacio respecto de la parte superior cuando se sigue el enlace. */
+#asistente { scroll-margin-top: 16px; }
+/* Separamos el texto de contexto del título y de las preguntas sugeridas. */
+.asistente-contexto { margin-top: 8px; color: var(--texto-secundario); font-size: .9rem; line-height: 1.5; overflow-wrap: anywhere; }
+/* Organizamos los atajos como una lista de botones de ancho completo. */
+.asistente-sugerencias { display: grid; gap: 8px; margin-top: 16px; }
+/* Conservamos un área cómoda y un texto alineado para leer cada pregunta sugerida. */
+.asistente-sugerencias button { min-height: 40px; padding: 8px 11px; border: 1px solid var(--borde); border-radius: 9px; background: var(--blanco); color: var(--azul-oscuro); text-align: start; font-size: .875rem; }
+/* Resaltamos solo los atajos que pueden seleccionarse. */
+.asistente-sugerencias button:hover:not(:disabled) { background: var(--azul-claro); }
+/* Atenuamos los atajos mientras esperamos una respuesta. */
+.asistente-sugerencias button:disabled { color: var(--texto-secundario); }
+
+/* Permitimos que la columna se reduzca al cambiar el ancho de la página. */
+.asistente-dialogo { min-width: 0; }
+/* Acotamos la altura de la conversación y conservamos el desplazamiento interno. */
+.asistente-mensajes { display: grid; gap: 9px; max-height: 320px; margin: 0 0 12px; padding: 0 4px; overflow-y: auto; list-style: none; }
+/* Quitamos el espacio de conversación hasta que haya una pregunta. */
+.asistente-mensajes:empty { display: none; }
+/* Presentamos respuestas en tarjetas con tamaño limitado y texto que puede ajustarse. */
+.asistente-mensajes li { min-width: 0; max-width: 92%; justify-self: start; padding: 9px 12px; border: 1px solid var(--borde); border-radius: 11px; background: #f6f8fc; overflow-wrap: anywhere; }
+/* Alineamos las preguntas del usuario al otro extremo y cambiamos su fondo. */
+.asistente-mensajes li[data-autor="usuario"] { justify-self: end; border-color: #d9e4ff; background: var(--azul-claro); }
+/* Usamos un fondo de aviso para fallos de conexión o del servicio. */
+.asistente-mensajes li[data-autor="error"] { border-color: #f5d7e2; background: #fff1f6; color: #912c50; }
+/* Identificamos quién habló sin competir con el mensaje. */
+.asistente-mensajes strong { font-size: .875rem; }
+/* Damos al mensaje espacio, tamaño e interlineado legibles. */
+.asistente-mensajes p { margin-top: 3px; font-size: .9375rem; line-height: 1.48; }
+/* Identificamos la fuente usada incluso si se ha iniciado otro análisis. */
+.asistente-mensajes small { display: block; margin-top: 6px; color: var(--texto-secundario); font-size: .8125rem; }
+
+/* Presentamos la etiqueta encima del grupo de envío. */
+.asistente-formulario label { display: block; margin-bottom: 7px; font-size: .9rem; font-weight: 650; }
+/* Permitimos que el campo crezca y mantenemos el botón junto a él. */
+.asistente-entrada { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+/* Usamos borde y altura coherentes con los controles de carga de imágenes. */
+.asistente-entrada input { min-width: 0; min-height: 44px; padding: 8px 11px; border: 1px solid #a9b9d4; border-radius: 9px; color: inherit; }
+/* Hacemos visible el foco cuando la pregunta se escribe usando teclado. */
+.asistente-entrada input:focus-visible { outline: 3px solid #6489f2; outline-offset: 2px; }
+
+/* Apilamos la introducción y el diálogo en pantallas angostas. */
+@media (max-width: 850px) {
+    /* Usamos la misma cuadrícula de una columna que los paneles de inspección. */
+    .asistente { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
+
+/* Damos más espacio para el texto en los teléfonos estrechos. */
+@media (max-width: 440px) {
+    /* Reducimos el relleno lateral para dejar ancho útil al diálogo. */
+    .asistente { padding: 15px; }
+    /* Apilamos el campo y el botón para que ambos mantengan su ancho útil. */
+    .asistente-entrada { grid-template-columns: minmax(0, 1fr); }
+}

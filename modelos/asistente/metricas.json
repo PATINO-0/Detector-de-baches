@@ -1,0 +1,38 @@
+{
+  "v4_test": {
+    "n": 56,
+    "f1_raw": 0.9315776815776816,
+    "f1_calibrated": 0.9298941798941799,
+    "accuracy": 0.9285714285714286,
+    "false_acceptance": 0.0833333358168602,
+    "coverage": 0.9772727489471436,
+    "accuracy_in_domain": 0.9318181872367859
+  },
+  "v3_test": {
+    "n": 78,
+    "f1_raw": 0.8777999777999779,
+    "f1_calibrated": 0.8880563880563881,
+    "accuracy": 0.8846153846153846,
+    "false_acceptance": 0.0833333358168602,
+    "coverage": 0.9545454382896423,
+    "accuracy_in_domain": 0.8787878751754761
+  },
+  "regression_val": {
+    "n": 132,
+    "f1_raw": 0.845985471290582,
+    "f1_calibrated": 0.8331641823198677,
+    "accuracy": 0.8257575757575758,
+    "false_acceptance": 0.27272728085517883,
+    "coverage": 0.9173553586006165,
+    "accuracy_in_domain": 0.8347107172012329
+  },
+  "regression_test": {
+    "n": 132,
+    "f1_raw": 0.8798956700558533,
+    "f1_calibrated": 0.873156421649938,
+    "accuracy": 0.8712121212121212,
+    "false_acceptance": 0.09090909361839294,
+    "coverage": 0.9504132270812988,
+    "accuracy_in_domain": 0.8677685856819153
+  }
+}

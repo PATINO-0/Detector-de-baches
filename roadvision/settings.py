@@ -85,6 +85,10 @@ STATIC_ROOT = BASE_DIR / ".static"
 MODELOS_DIR = Path(os.getenv("ROADVISION_MODELOS", BASE_DIR / "modelos"))
 # Configuramos los hilos de ONNX Runtime con 4 por defecto y un mínimo de 1.
 HILOS_ONNX = max(1, int(os.getenv("ROADVISION_HILOS", "4")))
+# Limitamos la longitud del texto antes de tokenizar una consulta del asistente.
+MAX_CARACTERES_PREGUNTA = 400
+# Acotamos el tamaño del contexto firmado que releemos en cada consulta.
+MAX_CARACTERES_CONTEXTO = 2048
 # Umbrales operativos para imágenes y fotogramas de cámara.
 # Filtramos las cajas de baches con la confianza operativa de la aplicación.
 UMBRAL_CONFIANZA_BACHES = 0.15

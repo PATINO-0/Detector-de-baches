@@ -1,0 +1,24 @@
+{# Cargamos el filtro que conserva el límite de caracteres como número HTML. #}{% load l10n %}
+{# Organizamos el asistente como una región accesible que podemos abrir desde la cabecera. #}<section id="asistente" class="panel asistente" aria-labelledby="titulo-asistente" tabindex="-1">
+    {# Agrupamos el contexto actual y los accesos rápidos a preguntas frecuentes. #}<div class="asistente-intro">
+        {# Damos nombre a la región de conversación. #}<h2 id="titulo-asistente">Asistente de inspección</h2>
+        {# Indicamos qué resultado está disponible para la siguiente pregunta. #}<p id="contexto-asistente" class="asistente-contexto">Analiza una imagen para consultar sus detecciones.</p>
+        {# Definimos ejemplos que pueden enviarse desde el mismo formulario. #}<div id="sugerencias-asistente" class="asistente-sugerencias" role="group" aria-label="Preguntas sugeridas">
+            {# Ofrecemos una consulta sobre la cantidad de baches. #}<button type="button" data-pregunta="¿Cuántos baches hay?">¿Cuántos baches hay?</button>
+            {# Ofrecemos una consulta sobre el porcentaje que cubre la máscara. #}<button type="button" data-pregunta="¿Qué porcentaje de la imagen tiene grietas?">¿Qué porcentaje de la imagen tiene grietas?</button>
+            {# Ofrecemos una consulta que reúne ambos indicadores. #}<button type="button" data-pregunta="Dame un resumen del análisis">Dame un resumen del análisis</button>
+        {# Cerramos los accesos rápidos a las consultas. #}</div>
+    {# Cerramos el contenido introductorio del asistente. #}</div>
+    {# Reunimos la conversación y el formulario en una misma columna. #}<div class="asistente-dialogo">
+        {# Reservamos un registro que anuncia los mensajes que añade JavaScript. #}<ol id="mensajes-asistente" class="asistente-mensajes" role="log" aria-label="Conversación con RoadVision"></ol>
+        {# Usamos el endpoint de texto en un formulario distinto al de carga de imágenes. #}<form id="formulario-asistente" class="asistente-formulario" action="{% url 'detector:asistente' %}" method="post">
+            {# Protegemos el envío de la consulta con el token que emitió Django. #}{% csrf_token %}
+            {# Identificamos el campo de pregunta para lectores de pantalla y teclados. #}<label for="pregunta-asistente">Tu pregunta</label>
+            {# Alineamos el campo de entrada con la acción principal. #}<div class="asistente-entrada">
+                {# Coordinamos el límite del navegador con el máximo de la API. #}<input id="pregunta-asistente" name="pregunta" type="text" maxlength="{{ max_caracteres_pregunta|unlocalize }}" autocomplete="off" placeholder="Escribe sobre los baches o las grietas" required>
+                {# Enviamos la consulta escrita con el botón o mediante Enter. #}<button id="enviar-pregunta" class="boton primario" type="submit">Preguntar</button>
+            {# Cerramos el grupo compuesto por el campo y la acción. #}</div>
+        {# Cerramos el formulario de preguntas. #}</form>
+        {# Anunciamos el progreso sin mover el foco del usuario. #}<p id="estado-asistente" class="estado" role="status"></p>
+    {# Cerramos la columna de conversación. #}</div>
+{# Terminamos el panel del asistente. #}</section>

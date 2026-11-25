@@ -2,6 +2,8 @@
 
 Desarrollamos RoadVision AI para inspeccionar visualmente el pavimento a partir de fotografías y fotogramas de cámara web. Procesamos cada imagen con dos modelos propios. Localizamos los baches con cajas y puntuaciones de confianza, y segmentamos las grietas por píxel. Mostramos ambas salidas sobre el mismo JPEG para que se puedan comparar con la fuente original y descargar.
 
+Integramos un asistente en español con el Transformer RoadVision V4. El modelo interpreta la intención de la pregunta y Django redacta la respuesta con los datos de la última inspección disponible.
+
 ## Contenido
 
 - [Alcance y conceptos](#alcance-y-conceptos)
@@ -10,6 +12,7 @@ Desarrollamos RoadVision AI para inspeccionar visualmente el pavimento a partir 
 - [Instalación y uso](#instalación-y-uso)
 - [Implementación paso a paso](#implementación-paso-a-paso)
 - [Modelos y métricas](#modelos-y-métricas)
+- [Asistente Transformer V4](#asistente-transformer-v4)
 - [Mapa del código](#mapa-del-código)
 - [Contrato HTTP](#contrato-http)
 - [Configuración y despliegue](#configuración-y-despliegue)
@@ -68,6 +71,7 @@ Comprobamos dos aspectos por separado. En la aplicación verificamos que la foto
 | **CSS** | Usamos Grid y Flexbox para distribuir los paneles, y media queries para adaptar el visor y los controles a pantallas estrechas. |
 | **JavaScript con módulos ES** | Controlamos la interfaz, la selección de archivos, la cámara y el análisis asíncrono con las APIs nativas del navegador. |
 | **ONNX y ONNX Runtime** | Empaquetamos los grafos y pesos en ONNX. Ejecutamos la inferencia con el proveedor de CPU de ONNX Runtime. |
+| **PyTorch** | Reconstruimos el Transformer del paquete V4 y cargamos su checkpoint para exportarlo a ONNX. Django usa la exportación en CPU con las dependencias existentes de ejecución. |
 | **NumPy** | Representamos píxeles y tensores, calculamos áreas y solapamientos y aplicamos la máscara mediante operaciones vectorizadas. |
 | **OpenCV sin interfaz gráfica** | Reescalamos imágenes y probabilidades, dibujamos cajas y texto y codificamos la salida JPEG en el servidor. |
 | **Pillow** | Abrimos imágenes JPEG, PNG y WebP, verificamos sus dimensiones y corregimos la orientación EXIF antes de producir RGB. |
@@ -258,6 +262,69 @@ Los JSON usan sintaxis JSON estándar. Documentamos sus campos aquí y validamos
 Tomamos estas cifras de los metadatos incluidos. La evaluación de baches usa las tres vistas del protocolo histórico. La de grietas usa `0.85` y cuenta los píxeles a **384 px**. Los umbrales operativos actuales son **0,15** para baches y **0,947** para grietas. Al comparar versiones, registramos el conjunto etiquetado, el umbral y la resolución, porque esas decisiones afectan la cantidad de marcas y las métricas. [Métricas de detección YOLO](https://docs.ultralytics.com/guides/yolo-performance-metrics/)
 
 
+
+## Asistente Transformer V4
+
+### Responsabilidad y uso
+
+Después de analizar una foto o un fotograma, abrimos **Asistente** desde la cabecera. Podemos escribir una pregunta o usar las opciones sugeridas. Por ejemplo, «¿Cuántos baches hay?», «¿Dónde están los baches?» y «¿Qué porcentaje de la imagen tiene grietas?». En la cámara en vivo, cada pregunta toma el último fotograma completado en el instante del envío. Mostramos la fuente de esa consulta junto a su respuesta.
+
+Separamos dos tareas. El Transformer entrenado **clasifica la intención** de la pregunta. Django **redacta** una respuesta en español con una plantilla y los datos verificables del análisis. Esta separación permite usar el mismo modelo de lenguaje para fotografías diferentes y actualizar las cifras cada vez que cambia la inspección.
+
+| Intención | Información que entregamos |
+| --- | --- |
+| `cantidad_baches` y `presencia_grietas` | Informamos cuántas cajas de baches quedaron después de la supresión y si hay píxeles marcados como grieta. |
+| `cobertura_grietas` | Informamos el porcentaje de píxeles que ocupa la máscara en la imagen analizada. |
+| `ubicacion_baches` | Dividimos el encuadre en una cuadrícula de tres filas y tres columnas. Ubicamos cada bache con el centro de su caja y agrupamos las cajas que caen en la misma zona. |
+| `confianza` | Calculamos el promedio de la puntuación de las cajas de baches cuando hay detecciones. |
+| `reporte_general` | Reunimos el conteo de baches y la cobertura de grietas. |
+| `dano_predominante` | Identificamos la clase cuando solo se detectó una. Si aparecen las dos, mostramos sus medidas por separado porque las cajas y los píxeles tienen unidades diferentes. |
+| `nivel_afectacion` y `recomendacion` | Describimos la afectación visible y, cuando se solicita una recomendación, orientamos a revisar el tramo en sitio. |
+| `ayuda` e `historial` | Explicamos las consultas disponibles y el alcance de la conversación en la página abierta. |
+| `fuera_de_dominio` | Pedimos una pregunta relacionada con los resultados cuando el clasificador rechaza la entrada. |
+
+Podemos pedir ayuda sin analizar una imagen. Para una pregunta que requiere detecciones, el asistente pide primero una foto o un fotograma. Conservamos el diálogo en el navegador durante la visita y podemos guardar el resultado visual con **Descargar imagen anotada**.
+
+### Cómo integramos el modelo
+
+1. Revisamos `roadvision_assistant_v4.zip` y tomamos su arquitectura, el checkpoint `transformer_best.pt`, `config.json` y el informe de métricas. Cargamos el checkpoint en PyTorch mediante `weights_only=True` y reconstruimos la arquitectura con sus parámetros originales. Seleccionamos el modo de evaluación para desactivar *dropout*.
+2. Exportamos a ONNX con opset 17. Conservamos las dos cabezas de clasificación, la calibración y la decisión de dominio del paquete original en el grafo. La entrada `ids` usa enteros de 64 bits con forma `[lote, 48]`. Las salidas `intencion` y `confianza` entregan un índice y su puntuación por pregunta.
+3. Reproducimos en Python el tokenizador BPE original. Convertimos a minúsculas, normalizamos los acentos, extraemos fragmentos alfanuméricos y aplicamos las 450 fusiones aprendidas. Usamos el vocabulario de 490 identificadores y reservamos la primera posición para `<CLS>`. Tomamos hasta 47 piezas de la pregunta, completamos con `<PAD>` hasta 48 posiciones y usamos `<UNK>` para piezas desconocidas.
+4. Ejecutamos el grafo en CPU con ONNX Runtime. La arquitectura usa incrustaciones de tokens y posiciones de dimensión 96 y dos bloques de codificación con cuatro cabezas de atención. La cabeza de intención distingue 11 clases dentro del dominio. La cabeza de dominio evalúa si la pregunta pertenece al ámbito del asistente. El grafo resuelve la etiqueta adicional `fuera_de_dominio` con la calibración original, incluido el umbral de dominio de `0.65`.
+5. Verificamos el SHA-256 del ONNX y cargamos su sesión al recibir la primera pregunta. Reutilizamos la sesión durante las consultas siguientes del mismo proceso. Incluimos el grafo y su ficha en `modelos/asistente/` para usar los mismos archivos en local o en Vercel. [Exportador ONNX de PyTorch](https://docs.pytorch.org/docs/stable/onnx_export.html)
+
+| Archivo | Contenido |
+| --- | --- |
+| [transformer.onnx](modelos/asistente/transformer.onnx) | Grafo que ejecuta el Transformer entrenado y su decisión calibrada. Pesa 839.211 bytes. |
+| [transformer.json](modelos/asistente/transformer.json) | Vocabulario, fusiones, etiquetas, arquitectura y calibración del paquete V4. En `exportacion` registramos las huellas del checkpoint y del ONNX, el opset y la comparación de paridad. |
+| [metricas.json](modelos/asistente/metricas.json) | Informe del entrenamiento entregado en el ZIP, con los resultados de V4, V3 y las particiones de regresión. |
+
+Para calibrar la decisión, dividimos las salidas de intención y dominio por sus temperaturas de `1.1` y `2.2` antes de aplicar *softmax*. Multiplicamos las probabilidades de intención por la de pertenencia al dominio y competimos con la probabilidad de estar fuera de dominio. Aplicamos también el umbral de pertenencia de `0.65`.
+
+Comparamos el tokenizador y la exportación con PyTorch en **532 consultas de validación, calibración y prueba** del paquete. Obtuvimos las mismas intenciones en las 532 y una diferencia absoluta máxima de **4,47 × 10⁻⁷** en la puntuación. Esta comparación mide la paridad de la exportación. En su evaluación etiquetada `v4_test` de 56 preguntas, el paquete registra **92,86 % de exactitud**, **92,99 % de F1 calibrado** y **8,33 % de aceptación errónea de consultas fuera de dominio**. Una intención incorrecta puede producir una respuesta con hechos del análisis que corresponden a otra pregunta.
+
+### Cómo relacionamos una pregunta con la inspección
+
+Cuando terminamos de analizar una imagen, Django construye un resumen con la cantidad y confianza promedio de las cajas, sus zonas, y la presencia y cobertura de grietas. Firmamos ese resumen con la clave de Django y lo devolvemos como `contexto_asistente`. La firma permite detectar cambios en el resumen. Los datos que se envían al asistente se limitan a la pregunta y ese contexto compacto.
+
+Configuramos `DJANGO_SECRET_KEY` en producción para que todas las instancias de Django puedan verificar los contextos firmados por el despliegue.
+
+Cuando preguntamos, el navegador guarda una referencia al contexto activo en ese momento y envía `POST /api/asistente/` con el token CSRF. Django verifica la firma, clasifica el texto con el modelo y redacta la respuesta usando los datos firmados. Al cambiar de fuente, el panel deja de usar el contexto anterior para consultas nuevas. Cada intervención ya mostrada conserva la fuente que le correspondía.
+
+### Módulos del asistente
+
+| Archivo | Responsabilidad |
+| --- | --- |
+| [detector/asistente/tokenizador.py](detector/asistente/tokenizador.py) | `TokenizadorBPE` prepara las prioridades de las fusiones, normaliza el texto y construye el vector de identificadores. |
+| [detector/asistente/modelo.py](detector/asistente/modelo.py) | `ModeloAsistente` verifica y ejecuta el grafo. `cargar_asistente` y `clasificar_consulta` coordinan su carga inicial y reutilización. |
+| [detector/asistente/contexto.py](detector/asistente/contexto.py) | `zona_bache` agrupa cajas por su centro. `firmar_resultado` crea el resumen y `abrir_contexto` valida su firma. |
+| [detector/asistente/respuestas.py](detector/asistente/respuestas.py) | `redactar` selecciona la respuesta según la intención y los datos disponibles. Los auxiliares aplican formato a porcentajes, cantidades y resúmenes. |
+| [detector/views.py](detector/views.py) | `consultar_asistente` valida la consulta JSON y enlaza la verificación de contexto, la clasificación y la respuesta. |
+| [detector/templates/detector/asistente.html](detector/templates/detector/asistente.html) | Presentamos las sugerencias, la conversación y el campo con su límite de caracteres. |
+| [detector/static/detector/js/asistente.js](detector/static/detector/js/asistente.js) | Vinculamos el panel con las detecciones, fijamos el contexto por consulta y mostramos el diálogo y los errores. |
+| [detector/static/detector/css/asistente.css](detector/static/detector/css/asistente.css) | Organizamos el diálogo, el foco y las acciones en pantallas amplias y móviles. |
+
+
 ## Mapa del código
 
 ### Entrada, configuración y HTTP
@@ -277,6 +344,7 @@ Tomamos estas cifras de los metadatos incluidos. La evaluación de baches usa la
 | --- | --- |
 | `inicio(request)` | Atendemos `GET` y `HEAD`, renderizamos la pantalla inicial y enviamos el límite en bytes. |
 | `analizar(request)` | Exigimos `POST`, leemos el campo `imagen`, atendemos el indicador de carga truncada, decodificamos y delegamos al servicio. Deshabilitamos la caché de respuestas del análisis. |
+| `consultar_asistente(request)` | Validamos el JSON y el contexto firmado antes de clasificar la pregunta. Usamos el resultado disponible para seleccionar y completar una respuesta en español. |
 | `error_json(mensaje, estado, **encabezados)` | Unificamos los errores de la API en un objeto con el campo `error` y el estado HTTP correspondiente. |
 | `error_csrf(request, reason="")` | Devolvemos un 403 comprensible cuando Django rechaza la solicitud por CSRF. El middleware registra el motivo técnico. |
 
@@ -322,6 +390,7 @@ Usamos [.gitignore](.gitignore) para mantener fuera de Git el entorno virtual, e
 | --- | --- |
 | `GET /` y `HEAD /` | Página de inspección. Al representar el formulario, Django genera el token CSRF e informa al navegador de su cookie. |
 | `POST /api/analizar/` | Enviamos `multipart/form-data` con un único archivo en el campo `imagen`. En el cliente incluimos la cookie del mismo sitio y el encabezado `X-CSRFToken` que corresponde al formulario. |
+| `POST /api/asistente/` | Enviamos un objeto JSON con la pregunta y el contexto firmado opcional. Usamos la misma protección CSRF que en el análisis. |
 | `GET /static/detector/…` | Servimos la hoja de estilos, los módulos JavaScript y la foto de ejemplo. |
 
 Usamos CSRF (*Cross-Site Request Forgery*) para proteger el POST contra solicitudes iniciadas desde otros sitios. Django comprueba el token y la cookie y valida el origen que envía el navegador. Conservamos el POST desde la misma página y dejamos que el navegador genere la frontera del cuerpo multipart a partir de `FormData`. [Protección CSRF de Django](https://docs.djangoproject.com/en/5.2/ref/csrf/)
@@ -346,7 +415,8 @@ Mostramos la estructura devuelta para la foto de ejemplo. Abreviamos el contenid
   "grietas": {
     "detectadas": true,
     "cobertura": 1.6464
-  }
+  },
+  "contexto_asistente": "<resumen firmado por Django>"
 }
 ```
 
@@ -357,6 +427,30 @@ Mostramos la estructura devuelta para la foto de ejemplo. Abreviamos el contenid
 | `baches` | Lista que puede quedar vacía. Cada entrada contiene la clase 0, el nombre, la confianza como valor de 0 a 1 y dos esquinas en píxeles. El origen de coordenadas está en la esquina superior izquierda. |
 | `grietas.detectadas` | Booleano que indica si al menos un píxel alcanzó el umbral de segmentación. |
 | `grietas.cobertura` | Porcentaje de píxeles marcados, de 0 a 100. La interfaz aplica formato local y el valor de la API conserva su precisión numérica. |
+| `contexto_asistente` | Resumen autenticado del conteo, la confianza, las zonas de baches y las medidas de grietas. Lo reutilizamos en el formulario de preguntas. |
+
+### Consulta al asistente
+
+Enviamos `Content-Type: application/json` y el encabezado `X-CSRFToken` junto con la cookie correspondiente. La pregunta admite hasta 400 caracteres y el contexto firmado hasta 2.048. Podemos enviar `null` o prescindir de `contexto` cuando preguntamos sin una inspección activa.
+
+```json
+{
+  "pregunta": "¿Cuántos baches hay?",
+  "contexto": "<valor de contexto_asistente devuelto por el análisis>"
+}
+```
+
+Con la inspección de ejemplo, obtenemos una respuesta de este tipo. Redondeamos la puntuación para mostrarla en esta ficha.
+
+```json
+{
+  "respuesta": "La detección encontró 1 bache en la imagen.",
+  "intencion": "cantidad_baches",
+  "confianza_intencion": 0.9787
+}
+```
+
+La propiedad `confianza_intencion` expresa la puntuación con que el modelo decidió la clase de la pregunta. La confianza de las cajas de baches procede del detector de imágenes. Para un contexto con firma inválida, devolvemos **400** y pedimos analizar otra vez la imagen. Si el cuerpo de la consulta usa otro tipo de contenido, devolvemos **415**.
 
 ### Errores
 
@@ -379,7 +473,7 @@ Leemos las variables del entorno del proceso. En local podemos definirlas desde 
 | `DJANGO_DEBUG` | `1` activa la depuración. Usamos `0` junto con una clave propia en un entorno público. |
 | `DJANGO_SECRET_KEY` | Clave de firma de Django. Es obligatoria en la configuración cuando desactivamos la depuración. |
 | `DJANGO_ALLOWED_HOSTS` | Lista de hosts separados por comas. Si falta, admitimos `localhost`, `127.0.0.1` y `[::1]`. |
-| `ROADVISION_MODELOS` | Carpeta que contiene ambos ONNX y ambos JSON. Usamos `modelos/` en la raíz del repositorio por defecto. |
+| `ROADVISION_MODELOS` | Carpeta de los pesos y metadatos de imágenes y de la subcarpeta `asistente/`. Usamos `modelos/` en la raíz del repositorio por defecto. |
 | `ROADVISION_HILOS` | Hilos internos por sesión de ONNX Runtime. Usamos `4` por defecto y aplicamos un mínimo de uno. |
 | `VERCEL` y `VERCEL_ENV` | Activamos los ajustes del proxy cuando Vercel indica que se trata de un despliegue. El entorno `development` conserva el comportamiento local. |
 | `VERCEL_URL`, `VERCEL_BRANCH_URL` y `VERCEL_PROJECT_PRODUCTION_URL` | Añadimos a los hosts permitidos los dominios de despliegue, de rama y de producción que Vercel pone a disposición. |
@@ -394,16 +488,17 @@ En [settings.py](roadvision/settings.py) centralizamos además los siguientes va
 | `STATIC_URL` y `STATIC_ROOT` | Servimos los estáticos con el prefijo `/static/` y recolectamos sus archivos en `.static/`. |
 | `SECURE_PROXY_SSL_HEADER` y `CSRF_COOKIE_SECURE` | En Vercel usamos `X-Forwarded-Proto` para que Django identifique HTTPS y marcamos la cookie para que viaje por HTTPS. |
 | `UMBRAL_CONFIANZA_BACHES` y `UMBRAL_SEGMENTACION_GRIETAS` | Aplicamos `0.15` y `0.947` al ejecutar ambos predictores desde la web. |
+| `MAX_CARACTERES_PREGUNTA` y `MAX_CARACTERES_CONTEXTO` | Validamos hasta 400 caracteres de texto y 2.048 de contexto firmado en cada consulta del asistente. |
 | `MAX_BYTES_IMAGEN`, `MAX_PIXELES_IMAGEN` y `MAX_LADO_ANALISIS` | Definimos 10 MiB de archivo, 24 millones de píxeles de origen y 1.600 píxeles como lado mayor de análisis. |
 | `DATA_UPLOAD_MAX_MEMORY_SIZE`, `DATA_UPLOAD_MAX_NUMBER_FILES` y `DATA_UPLOAD_MAX_NUMBER_FIELDS` | Limitamos a 256 KiB los datos sujetos al límite de memoria de Django, a uno los archivos y a ocho los campos multipart. |
 | `FILE_UPLOAD_MAX_MEMORY_SIZE` y `FILE_UPLOAD_HANDLERS` | Fijamos el umbral de memoria de Django en 10 MiB más 64 KiB. Encadenamos el límite personalizado, el manejador en memoria y el manejador de archivo temporal. |
 
 ### Publicar en Vercel con ONNX en el repositorio
 
-1. Importamos el repositorio en Vercel con la raíz en el directorio que contiene `manage.py` y usamos el soporte nativo de Django. Mantenemos en el proyecto el directorio `modelos/` con los cuatro archivos que requiere la inferencia.
+1. Importamos el repositorio en Vercel con la raíz en el directorio que contiene `manage.py` y usamos el soporte nativo de Django. Incluimos los ONNX y JSON de imágenes y el contenido de `modelos/asistente/` para ejecutar los tres modelos.
 2. En **Settings → Environment Variables**, habilitamos **Automatically expose System Environment Variables**. Configuramos `DJANGO_DEBUG=0` y `DJANGO_SECRET_KEY` para producción. Si usamos dominios adicionales a los que Vercel expone automáticamente, los añadimos a `DJANGO_ALLOWED_HOSTS` sin protocolo.
 3. Desplegamos la revisión. Vercel detecta el módulo WSGI y recoge los archivos estáticos. Django abre los ONNX cuando se ejecuta la primera solicitud de análisis en el proceso.
-4. Abrimos el dominio HTTPS y analizamos el ejemplo. Probamos luego una foto y el acceso a la cámara. Comprobamos en **Runtime Logs** los fallos que aparezcan.
+4. Abrimos el dominio HTTPS y analizamos el ejemplo. Probamos una foto, el acceso a la cámara y una pregunta sobre las detecciones. Comprobamos los fallos que aparezcan en **Runtime Logs**.
 
 [Despliegue de Django en Vercel](https://vercel.com/docs/frameworks/full-stack/django) · [Variables de sistema de Vercel](https://vercel.com/docs/environment-variables/system-environment-variables)
 
@@ -416,6 +511,7 @@ En [settings.py](roadvision/settings.py) centralizamos además los siguientes va
 | Arranque de Django | Ejecutamos `manage.py check` y confirmamos que el proyecto arranca y resuelve las rutas al abrir la portada. |
 | Archivos estáticos | Ejecutamos `manage.py findstatic detector/js/interfaz.js detector/img/tramo-de-ejemplo.jpg` para confirmar que Django encuentra los módulos y la foto. `manage.py collectstatic --noinput` prepara la carpeta de salida cuando queremos verificar la recolección en local. |
 | Inferencia con el ejemplo | Pulsamos **Analizar imagen** desde el estado inicial. En la configuración documentada, verificamos **1 bache** y cerca de **1,65 % de cobertura** con el JPEG del repositorio. |
+| Asistente con el ejemplo | Preguntamos «¿Cuántos baches hay?» antes y después del análisis. Antes se solicita una imagen. Después coinciden el conteo de la respuesta y el del visor. Al cambiar de fuente, verificamos que las nuevas consultas esperan un análisis de esa fuente. |
 | Imagen inválida y tamaño | Probamos un archivo corrupto o un formato incompatible para comprobar la respuesta de validación. Probamos un archivo mayor al límite de Django para comprobar el mensaje de tamaño. |
 | Cámara y descarga | Abrimos la cámara, capturamos una imagen y esperamos que aparezca el resultado. Comprobamos las actualizaciones en vivo, la pausa, la liberación del dispositivo y que el JPEG descargado se abra correctamente. |
 | CSRF y HTTPS | Probamos una solicitud con token y origen válidos. Simulamos el proxy Vercel con `X-Forwarded-Proto: https` para comprobar que el mismo origen se acepta y que un origen diferente sigue rechazándose. |
@@ -425,6 +521,7 @@ En [settings.py](roadvision/settings.py) centralizamos además los siguientes va
 
 - **La portada abre pero el análisis devuelve 403.** Revisamos si el dominio aparece en las variables de Vercel o en `DJANGO_ALLOWED_HOSTS` y si el proxy indica HTTPS. Luego recargamos el formulario y comprobamos que la cookie CSRF y el encabezado lleguen en la misma solicitud.
 - **El análisis devuelve 503.** Revisamos la excepción registrada por `detector.views`. Confirmamos que `ROADVISION_MODELOS` apunta a la carpeta correcta, que los cuatro archivos tienen los nombres documentados y que los hashes coinciden.
+- **El asistente devuelve 503.** Revisamos su excepción en los registros de Django y verificamos que `modelos/asistente/transformer.onnx` y su JSON estén incluidos. Si falla la firma del contexto después de cambiar la clave de Django, analizamos de nuevo la imagen para obtener un contexto válido.
 - **El servidor devuelve 413.** Distinguimos en los registros el límite de Django del límite de Vercel. Reintentamos con una imagen que quepa en el límite que se aplica a esa solicitud.
 - **La cámara no inicia.** Comprobamos el permiso de cámara, la disponibilidad del dispositivo y que el navegador abrió la página mediante HTTPS o `localhost`.
 - **El resultado está vacío o aparecen marcas inesperadas.** Revisamos las puntuaciones, la iluminación, la distancia y el encuadre. Contrastamos el resultado con una muestra anotada usando los mismos umbrales y la misma resolución para poder interpretar los cambios.

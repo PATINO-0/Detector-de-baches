@@ -1,4 +1,17 @@
-/* Enviar imágenes a Django y recuperar la respuesta de ambos modelos. */
+/* Enviamos imágenes y preguntas a Django y leemos sus respuestas JSON. */
+
+// Unificamos el tratamiento de respuestas de los dos endpoints.
+async function leerRespuesta(respuesta, mensajeAlternativo) {
+    // Intentamos interpretar el cuerpo como JSON aunque el servidor responda con error.
+    const datos = await respuesta.json().catch(() => null);
+    // Consideramos un fallo tanto el estado HTTP desfavorable como un cuerpo ilegible.
+    if (!respuesta.ok || !datos) {
+        // Preferimos la explicación de Django cuando está disponible.
+        throw new Error(datos?.error || mensajeAlternativo);
+    }
+    // Entregamos los datos válidos a quien solicitó la operación.
+    return datos;
+}
 
 // Exportamos el cliente del análisis para compartirlo entre foto, ejemplo y cámara.
 export async function solicitarAnalisis(formulario, imagen, señal) {
@@ -18,15 +31,8 @@ export async function solicitarAnalisis(formulario, imagen, señal) {
         // Asociamos la señal que permite cancelar una solicitud cuando cambia la fuente.
         signal: señal,
     });
-    // Intentamos interpretar el cuerpo como JSON aunque el servidor responda con error.
-    const resultado = await respuesta.json().catch(() => null);
-    // Consideramos un fallo tanto el estado HTTP desfavorable como una respuesta ilegible.
-    if (!respuesta.ok || !resultado) {
-        // Preferimos el mensaje de Django o usamos una explicación cuando no hay JSON útil.
-        throw new Error(resultado?.error || "El servidor no pudo completar el análisis.");
-    }
-    // Entregamos los datos de detección a la interfaz.
-    return resultado;
+    // Entregamos los datos de detección usando el tratamiento común de la API.
+    return leerRespuesta(respuesta, "El servidor no pudo completar el análisis.");
 }
 
 // Exportamos la descarga del ejemplo para analizarlo como un archivo adicional.
@@ -40,4 +46,19 @@ export async function cargarEjemplo(url, señal) {
     }
     // Convertimos la respuesta en un Blob para enviarlo por el mismo formulario.
     return respuesta.blob();
+}
+
+// Enviamos una pregunta con el resumen firmado de la inspección que la acompaña.
+export async function solicitarRespuestaAsistente(formulario, pregunta, contexto) {
+    // Hacemos una solicitud separada de la carga de imágenes y de la cámara.
+    const respuesta = await fetch(formulario.action, {
+        // Usamos el método que espera el endpoint del asistente.
+        method: "POST",
+        // Declaramos JSON y reutilizamos el token CSRF que emitió Django en este formulario.
+        headers: { "Content-Type": "application/json", "X-CSRFToken": formulario.elements.csrfmiddlewaretoken.value },
+        // Enviamos texto y un token opcional, sin adjuntar el contenido de la imagen.
+        body: JSON.stringify({ pregunta, contexto }),
+    });
+    // Recuperamos la respuesta redactada o una indicación de error.
+    return leerRespuesta(respuesta, "El asistente no pudo responder. Inténtalo de nuevo.");
 }
